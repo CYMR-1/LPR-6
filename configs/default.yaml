@@ -1,0 +1,346 @@
+# =============================================================================
+# ProjectX 全局配置
+# -----------------------------------------------------------------------------
+# 规格来源：《ProjectX · AI 开发提示词》§0–§8
+# 本文件是全部超参数的唯一来源，任何脚本内不得硬编码超参数（§0.2 要求 2）。
+#
+# 约定：
+#   * 张量默认形状记号 (N, C) / (N, D)，输入图像为 (N, 4096)；
+#   * 图像尺寸统一记作 [宽 W, 高 H]（与 numpy 数组的 (H, W) 相反，注意转换）；
+#   * 所有随机种子集中在 base_seeds 中，禁止在代码里写死随机数。
+# =============================================================================
+
+project:
+  name: "ProjectX"
+  version: "1.0.0"
+  task: "共享 MLP 与位置分类头的车牌后六位字符识别"
+  # 预处理脚本版本号，写入 manifest.csv 用于溯源（§2.5 要求 2）
+  preprocess_version: "prep-v1.0.0"
+
+# -----------------------------------------------------------------------------
+# 随机种子（§3.3 / §4.3）：所有实验统一基线 seed=42，每实验至少 3 个种子
+# -----------------------------------------------------------------------------
+base_seeds: [42, 43, 44]
+
+# -----------------------------------------------------------------------------
+# 数据路径（§2.2 / §8.3）：data/ccpd 与 data/synth_test 均不入库
+# -----------------------------------------------------------------------------
+paths:
+  ccpd_root: "data/ccpd"                 # CCPD 原图（按子集分目录）
+  synth_root: "data/synth_test"          # 合成域测试图
+  synth_preview: "data/synth_test_preview"  # 合成过程人工核对预览（不入库）
+  processed_dir: "data/processed"        # .npz 预处理缓存
+  manifest: "data/manifest.csv"          # 每张图可追溯的来源记录
+  ccpd_readme: "data/CCPD_README.md"     # 官方 README 存档（字符映射核对依据）
+  models_dir: "reports/checkpoints"
+  logs_dir: "reports/logs"
+  figs_dir: "reports/figs"
+  tables_dir: "reports/tables"
+
+# -----------------------------------------------------------------------------
+# 字符集（§2.1）：数字 0-9 + 大写字母 A-Z 去掉 I、O = 34 类
+# -----------------------------------------------------------------------------
+charset:
+  digits: "0123456789"
+  letters: "ABCDEFGHJKLMNPQRSTUVWXYZ"    # 26 - 2 = 24
+  num_classes: 34
+  seq_len: 6                             # 汉字之后的六个字符位置
+  # 每个位置的类别数。基线 34×6；E9 置为 [24, 34, 34, 34, 34, 34]（首位仅字母）
+  positions: [34, 34, 34, 34, 34, 34]
+  # 位置合法性约束：allow[i] 为该位置允许的类别索引下界与上界（含）
+  # index 0..23 = 字母表（A-Z 去掉 I/O），index 24..33 = 数字 0-9
+  position_letter_max_index: 23          # 首位仅允许 0..23 时使用（E9）
+
+# -----------------------------------------------------------------------------
+# CCPD 解析与裁剪（§2.3）
+# -----------------------------------------------------------------------------
+ccpd:
+  # 子集目录名 -> 用途。CCPD 官方目录名为小写 ccpd_* 形式
+  subsets:
+    base: "ccpd_base"
+    blur: "ccpd_blur"
+    challenge: "ccpd_challenge"
+    rotate: "ccpd_rotate"
+    tilt: "ccpd_tilt"
+    weather: "ccpd_weather"
+    fn: "ccpd_fn"
+    green: "ccpd_green"                  # 8 位新能源牌，必须跳过（§2.4 只保留 7 位）
+  train_subset: "base"
+  # 强扰动测试集来源子集（§2.5）
+  hard_subset_names: ["blur", "challenge", "rotate", "tilt", "weather", "fn"]
+  # 透视矫正目标尺寸（正视车牌，含首位汉字），随后裁掉左侧 1/7
+  rectify_size: [168, 52]                # [W, H]
+  # 裁剪后缩放到的最终输入尺寸（§3.1）
+  input_size: [128, 32]                  # [W, H]，即 32×128
+  keep_right_fraction: 0.8571428571428571  # 6/7：裁掉首位汉字区域
+  grayscale: true
+  # 顶点合法性过滤阈值（§2.3.2）
+  min_quad_area_px: 200.0                # 四边形面积下限（原图像素）
+  max_bbox_over_area: 1.0                # 外接框不得超出图像
+  allow_out_of_bounds_px: 2.0            # 允许的轻微越界像素容差
+
+# -----------------------------------------------------------------------------
+# 数据集划分（§2.5 ★ 号码去重协议）
+# -----------------------------------------------------------------------------
+split:
+  val_size: 2000
+  test_size: 2000                        # 同分布测试集（CCPD-Base）
+  train_size: 20000                      # 基线；GPU 时可调至 50000–100000
+  synth_test_size: 2000                  # 合成域测试集
+  hard_test_size: 2000                   # 强扰动测试集
+  # 划分随机种子（写入 manifest，保证划分可复现）
+  split_seed: 42
+  # 一个号码是否允许贡献多张图到同一集合内（CCPD 同车多帧）。True = 允许
+  allow_multi_frame_same_split: true
+
+# -----------------------------------------------------------------------------
+# 合成域测试集（§2.4）
+# -----------------------------------------------------------------------------
+synth:
+  # 生成后端：
+  #   pil_renderer —— 本仓库内置的确定性合成器（PIL 渲染 + 系统 CJK 字体）
+  #   generator_repo —— 外部仓库 Nenger/chinese_licence_plate_generator（需 cv2，且产出整图需检测切分）
+  backend: "pil_renderer"
+  seed: 2024                             # 固定生成种子（§2.4 要求 1）
+  width: 128
+  height: 32
+  # 每个字符位可用的字体（模拟跨域字体差异）。E9 说明：首位为省份汉字，不参与识别，
+  # 合成时同样渲染汉字以保证"汉字区域被裁掉"这一几何一致性。
+  fonts:
+    - "C:/Windows/Fonts/simhei.ttf"
+    - "C:/Windows/Fonts/msyh.ttc"
+    - "C:/Windows/Fonts/simsun.ttc"
+    - "C:/Windows/Fonts/Deng.ttf"
+  # 车牌底色（蓝底白字 / 黄底黑字 / 白底黑字 / 绿底黑字）
+  plate_styles:
+    - { name: "blue_on_white", bg: [30, 60, 160], fg: [240, 245, 250], noise: 6.0 }
+    - { name: "black_on_yellow", bg: [215, 180, 40], fg: [20, 20, 20], noise: 6.0 }
+    - { name: "black_on_white", bg: [235, 235, 235], fg: [25, 25, 25], noise: 6.0 }
+    - { name: "black_on_green", bg: [40, 150, 80], fg: [20, 20, 20], noise: 6.0 }
+  # 合成域成像扰动（比训练增强更"干净"，用于检验真实→合成的纯跨域差距）
+  jitter: 1.0                            # 字符水平抖动像素幅度系数
+  rotation_deg: 0.0                      # 合成测试集本身不加旋转（旋转属强扰动集）
+  blur_sigma: 0.0
+  jpeg_quality: null                     # null = 不压缩
+
+# -----------------------------------------------------------------------------
+# 数据增强（§2.6）：训练时随机施加，强度分 无 / 弱(基线) / 强 三档
+# -----------------------------------------------------------------------------
+augmentation:
+  baseline_level: "weak"                 # 训练默认档位
+  levels:
+    none:
+      enabled: false
+      rotation_deg: 0.0
+      translate_px: 0
+      scale_range: [1.0, 1.0]
+      gaussian_blur_prob: 0.0
+      motion_blur_prob: 0.0
+      gaussian_noise_prob: 0.0
+      gaussian_noise_sigma: 0.0
+      salt_pepper_prob: 0.0
+      salt_pepper_ratio: 0.0
+      brightness_range: [1.0, 1.0]
+      contrast_range: [1.0, 1.0]
+      jpeg_prob: 0.0
+      jpeg_quality_range: [95, 100]
+    weak:
+      enabled: true
+      rotation_deg: 5.0                  # ±5°
+      translate_px: 2                    # ±2 px
+      scale_range: [0.9, 1.1]
+      gaussian_blur_prob: 0.25
+      motion_blur_prob: 0.15
+      gaussian_noise_prob: 0.30
+      gaussian_noise_sigma: 0.02         # σ ∈ [0, 0.02]
+      salt_pepper_prob: 0.10
+      salt_pepper_ratio: 0.003           # 0.1%–1%
+      brightness_range: [0.85, 1.15]
+      contrast_range: [0.85, 1.15]
+      jpeg_prob: 0.20
+      jpeg_quality_range: [60, 95]
+    strong:
+      enabled: true
+      rotation_deg: 12.0                 # ±12°（强扰动对照）
+      translate_px: 4
+      scale_range: [0.85, 1.15]
+      gaussian_blur_prob: 0.50
+      motion_blur_prob: 0.35
+      gaussian_noise_prob: 0.55
+      gaussian_noise_sigma: 0.05
+      salt_pepper_prob: 0.25
+      salt_pepper_ratio: 0.010           # 1%
+      brightness_range: [0.6, 1.4]       # 增益 ×[0.6, 1.4]
+      contrast_range: [0.6, 1.4]
+      jpeg_prob: 0.50
+      jpeg_quality_range: [30, 85]
+
+# -----------------------------------------------------------------------------
+# 模型结构（§3）
+# -----------------------------------------------------------------------------
+model:
+  arch: "shared"                         # shared（主模型）| independent（E1 对照）
+  input_dim: 4096                        # 32 × 128
+  hidden_dim: 256                        # 基线；对照 128 / 512
+  activation: "sigmoid"                  # 基线 sigmoid；E2 对照 relu
+  init: "xavier"                         # xavier / he / small_normal
+  # 各位置输出维度：null 表示采用 charset.positions
+  head_dims: null
+
+# -----------------------------------------------------------------------------
+# 损失函数（§4.1）
+# -----------------------------------------------------------------------------
+loss:
+  type: "cross_entropy"                  # 基线；E3 对照 mse
+  l2_lambda: 1.0e-4                      # 基线；搜索 {0, 1e-5, 1e-4, 1e-3}
+  penalize_bias: false                   # ★ 偏置项不参与 L2 惩罚
+  softmax_eps: 1.0e-12                   # 防 log(0)
+
+# -----------------------------------------------------------------------------
+# 优化器（§4.3 / §4.5 / §8）
+# -----------------------------------------------------------------------------
+optim:
+  optimizer: "sgd_momentum"
+  learning_rate: 0.05                    # 搜索 {0.01, 0.05, 0.1}
+  momentum: 0.9                          # 基线；E5 对照 0
+  batch_size: 64                         # 基线；E4 对照 {1, 32, 128, full}
+  shuffle: true
+  backend: "numpy"                       # numpy | cupy（§8.1，无 GPU 自动回退）
+  # 学习率调度：none = 常数学习率
+  lr_decay: 0.0                          # 每 epoch 乘 (1 - lr_decay)
+  weight_decay_separate: true            # L2 与动量解耦（本项目 L2 直接加在梯度里）
+
+# -----------------------------------------------------------------------------
+# 训练循环（§4.3）
+# -----------------------------------------------------------------------------
+train:
+  epochs: 80                             # 40–80，上限 100
+  early_stop_patience: 8                 # 验证损失连续 8 轮不降则早停
+  early_stop_min_delta: 1.0e-5
+  monitor: "val_loss"                    # 早停与最佳模型判据
+  save_best_only: true                   # ★ 保存最佳验证模型，而非最后一轮
+  clip_grad_norm: null                   # null = 不裁剪
+  eval_every: 1                          # 每多少轮做一次验证
+  log_every: 1
+  # 小样本过拟合自检（P2/P3 验收，§5.4）
+  overfit_check:
+    n_samples: 100
+    epochs: 400
+    learning_rate: 0.5
+    l2_lambda: 0.0
+    target_loss: 1.0e-3
+    target_char_acc: 1.0
+
+# -----------------------------------------------------------------------------
+# 评估指标（§6）
+# -----------------------------------------------------------------------------
+eval:
+  batch_size: 512
+  top_k: 3
+  confusion_per_position: true            # 逐位置 34×34 混淆矩阵
+  error_table_top_n: 200                  # 错误样本表：优先高置信错误
+  high_confidence_threshold: 0.9          # "高置信错误"的判定阈值
+  report_cpu_time: true                   # ★ 必须报告 CPU 单张/批量推理时间
+  cpu_time_warmup: 5
+  cpu_time_repeat: 20
+  cpu_time_batch_sizes: [1, 32, 512]
+
+# -----------------------------------------------------------------------------
+# 梯度检查（§5.4）
+# -----------------------------------------------------------------------------
+grad_check:
+  n_samples: 8
+  relative_error_tol: 1.0e-5             # ★ 相对误差 < 1e-5
+  n_checks_per_param: 3                  # 每类参数抽查的分量数
+  epsilon: 1.0e-5
+  seed: 42
+
+# -----------------------------------------------------------------------------
+# 对照实验矩阵 E1–E9（§7）
+# -----------------------------------------------------------------------------
+experiments:
+  # 本轮一键执行的实验；E1/E3/E4/E7 为必做（§9 优先级）
+  enabled: ["E1", "E3", "E4", "E7"]
+  all_defined: ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9"]
+
+  # 每个实验的变体定义。key = 变体名，value = 覆盖到基线的配置补丁（点分路径）
+  E1:                                     # ★ 共享六头 vs 六个独立 MLP
+    question: "共享隐层是否优于六个独立 MLP"
+    variants:
+      shared:        { "model.arch": "shared" }
+      independent:   { "model.arch": "independent" }
+    seeds: [42, 43, 44]
+
+  E2:                                     # ReLU vs Sigmoid
+    question: "激活函数对训练速度与饱和的影响"
+    variants:
+      sigmoid:       { "model.activation": "sigmoid" }
+      relu:          { "model.activation": "relu" }
+    seeds: [42, 43, 44]
+
+  E3:                                     # ★ 交叉熵 vs 平方误差
+    question: "损失函数对前 20 轮下降速度与最终准确率的影响"
+    variants:
+      cross_entropy: { "loss.type": "cross_entropy" }
+      mse:           { "loss.type": "mse" }
+    seeds: [42, 43, 44]
+
+  E4:                                     # ★ 批量策略
+    question: "批量大小 / SGD / 小批量对稳定性与泛化的影响"
+    variants:
+      batch_1:       { "optim.batch_size": 1 }
+      batch_32:      { "optim.batch_size": 32 }
+      batch_64:      { "optim.batch_size": 64 }      # 基线
+      batch_128:     { "optim.batch_size": 128 }
+      batch_full:    { "optim.batch_size": -1 }      # -1 = 全批量
+    seeds: [42, 43, 44]
+
+  E5:                                     # 有无动量
+    question: "动量对震荡幅度与收敛速度的影响"
+    variants:
+      momentum_0:    { "optim.momentum": 0.0, "optim.learning_rate": 0.01 }
+      momentum_09:   { "optim.momentum": 0.9 }
+    seeds: [42, 43, 44]
+
+  E6:                                     # 有无 L2
+    question: "L2 正则对训练/验证差距与合成域准确率的影响"
+    variants:
+      l2_0:          { "loss.l2_lambda": 0.0 }
+      l2_1e-5:       { "loss.l2_lambda": 1.0e-5 }
+      l2_1e-4:       { "loss.l2_lambda": 1.0e-4 }    # 基线
+      l2_1e-3:       { "loss.l2_lambda": 1.0e-3 }
+    seeds: [42, 43, 44]
+
+  E7:                                     # ★ 有无数据增强
+    question: "数据增强对强扰动与合成域测试集准确率的影响"
+    variants:
+      aug_none:      { "augmentation.baseline_level": "none" }
+      aug_weak:      { "augmentation.baseline_level": "weak" }    # 基线
+      aug_strong:    { "augmentation.baseline_level": "strong" }
+    seeds: [42, 43, 44]
+
+  E8:                                     # 输入尺寸
+    question: "32×128 与 24×96 的精度/推理时间权衡"
+    variants:
+      size_32x128:   { "ccpd.input_size": [128, 32], "model.input_dim": 4096 }
+      size_24x96:    { "ccpd.input_size": [96, 24],  "model.input_dim": 2304 }
+    seeds: [42, 43, 44]
+
+  E9:                                     # 首位类别数
+    question: "全 34 类 vs 首位 24 类"
+    variants:
+      heads_34x6:    { "charset.positions": [34, 34, 34, 34, 34, 34] }
+      heads_24x34x5: { "charset.positions": [24, 34, 34, 34, 34, 34] }
+    seeds: [42, 43, 44]
+
+# -----------------------------------------------------------------------------
+# 绘图与汇总（§6 / §8.3）
+# -----------------------------------------------------------------------------
+viz:
+  dpi: 150
+  fig_format: "png"
+  curve_metrics: ["train_loss", "val_loss", "val_char_acc", "val_seq_acc"]
+  confusion_normalize: true
+  grid_samples: 20                        # 人工核对网格图张数（§2.3.3）
+  grid_cols: 4
+  chinese_font: "C:/Windows/Fonts/simhei.ttf"   # matplotlib 中文显示

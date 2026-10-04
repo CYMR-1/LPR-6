@@ -1,0 +1,13 @@
+# ProjectX 依赖（路线 A：NumPy 手写反向传播）
+# 安装： pip install -r requirements.txt
+numpy>=1.26
+Pillow>=10.0
+matplotlib>=3.8
+pandas>=2.0
+tqdm>=4.66
+PyYAML>=6.0
+
+# --- 可选：GPU 训练后端（CuPy，numpy 的 GPU 兼容替代）---
+# 反向传播仍为手写，仅矩阵运算在 GPU 上执行，不违反"禁止自动求导"约束。
+# 请按本机 CUDA 版本选择对应包；无 GPU 时保持注释即可，程序会自动回退 numpy 纯 CPU。
+# cupy-cuda12x
