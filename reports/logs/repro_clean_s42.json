@@ -1,0 +1,100 @@
+{
+  "purpose": "干净工作区复跑验证：P7 修复（mask进反向/monitor方向/越界断言）对 34×6 口径数值中性",
+  "old_run": "baseline_s42",
+  "new_run": "verify_clean_s42",
+  "old_commit": "eee708e",
+  "new_commit": "8ec7f29",
+  "new_dirty": false,
+  "epochs": [
+    51,
+    51
+  ],
+  "best_epoch": [
+    43,
+    43
+  ],
+  "history_rows": [
+    51,
+    51
+  ],
+  "history_bit_identical": false,
+  "metrics_equal": true,
+  "metrics_detail": {
+    "train.loss": {
+      "old": 3.118746,
+      "new": 3.118746,
+      "equal": true
+    },
+    "train.char_acc": {
+      "old": 0.887556,
+      "new": 0.887556,
+      "equal": true
+    },
+    "train.plate_acc": {
+      "old": 0.499333,
+      "new": 0.499333,
+      "equal": true
+    },
+    "val.loss": {
+      "old": 3.577547,
+      "new": 3.577547,
+      "equal": true
+    },
+    "val.char_acc": {
+      "old": 0.864583,
+      "new": 0.864583,
+      "equal": true
+    },
+    "val.plate_acc": {
+      "old": 0.423,
+      "new": 0.423,
+      "equal": true
+    },
+    "test.loss": {
+      "old": 3.547101,
+      "new": 3.547101,
+      "equal": true
+    },
+    "test.char_acc": {
+      "old": 0.867333,
+      "new": 0.867333,
+      "equal": true
+    },
+    "test.plate_acc": {
+      "old": 0.426,
+      "new": 0.426,
+      "equal": true
+    },
+    "hard_test.loss": {
+      "old": 10.546156,
+      "new": 10.546156,
+      "equal": true
+    },
+    "hard_test.char_acc": {
+      "old": 0.628,
+      "new": 0.628,
+      "equal": true
+    },
+    "hard_test.plate_acc": {
+      "old": 0.1255,
+      "new": 0.1255,
+      "equal": true
+    },
+    "synth_test.loss": {
+      "old": 62.549203,
+      "new": 62.549203,
+      "equal": true
+    },
+    "synth_test.char_acc": {
+      "old": 0.056167,
+      "new": 0.056167,
+      "equal": true
+    },
+    "synth_test.plate_acc": {
+      "old": 0.0,
+      "new": 0.0,
+      "equal": true
+    }
+  },
+  "history_bit_identical_excluding_epoch_seconds": true
+}

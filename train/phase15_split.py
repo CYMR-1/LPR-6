@@ -384,6 +384,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         [i for i, t in zip(hard_idx_all, hard_texts) if t not in base_keys],
         dtype=np.int64,
     )
+    # ★ 候选必须先排序再抽样：rng.choice 按位置取样，候选数组若保持缓存顺序，
+    # 同样的 seed 在不同缓存顺序下会选出**不同的样本**（实测踩坑：hard 集内容
+    # 整体改变）。排序后选择与缓存顺序无关（给定规范顺序的缓存即确定性）。
+    # 注意：仓库当前 data/processed/splits.npz 保留的是历史（规范排序之前）
+    # 选出的 hard 集，以便与 48 次历史运行的 hard_test 指标对齐；从零重建
+    # 会得到同规模、同基数但内容不同的 canonical hard 集，train/val/test
+    # 三个集合的**号码集合**则不受缓存顺序影响、始终一致。
+    hard_candidates = np.sort(hard_candidates)
     if len(hard_candidates) > hard_size:
         hard_idx = np.sort(rng.choice(hard_candidates, size=hard_size, replace=False))
     else:

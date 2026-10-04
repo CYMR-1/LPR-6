@@ -1042,7 +1042,13 @@ def compute_loss(
         else:
             raise ValueError(f"不支持的损失类型 {loss_type!r}")
         if head_mask is not None:
-            ce_i = ce_i * head_mask[i]
+            m = head_mask[i]
+            # GPU 后端下掩码必须在同一设备上，否则 cupy 与 numpy 相乘会报错
+            # （E9 评测链路实测踩坑；训练链路在 Trainer._head_mask 已转换）
+            if backend.is_gpu and not type(m).__module__.startswith("cupy"):
+                from models.backend import to_device
+                m = to_device(np.asarray(m), backend)
+            ce_i = ce_i * m
         per_pos.append(ce_i)
 
     data_loss = per_pos[0]

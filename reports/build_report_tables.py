@@ -597,8 +597,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 "",
                 "> 本文件由数值产物生成，**不要手工编辑**；重跑实验后重新生成即可。",
                 ""]
-        for key in ("baseline", "e1", "e3", "e4", "e7", "midtrain", "position",
-                    "cpu", "ranking"):
+        # 写出全部表格：直接遍历 build_all 的键，避免键列表与生成器脱节
+        # （曾硬编码 9 键导致 e2/e5/e6/e8/e9 五段缺失，supervisor 终审发现）
+        for key in tables:
             body.append(f"## {key}")
             body.append("")
             body.append(tables.get(key, ""))
