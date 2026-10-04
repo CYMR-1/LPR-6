@@ -217,8 +217,7 @@ python reports/build_report_tables.py --write --inject
 ## 5. 识别自己准备的车牌（推理）
 
 训练好的权重在 `reports/checkpoints/<run>_best.npz`。用根目录的
-`predict.py` 即可识别任意一张**已裁出车牌区域**的图片（本项目不做车牌
-检测：车牌区域需要你自己裁，或用 `--corners` 给出四角顶点）：
+`predict.py` 即可识别任意一张**已裁出车牌区域**的图片（本项目不做车牌检测：车牌区域需要你自己裁，或用 `--corners` 给出四角顶点）：
 
 ```bash
 # 图片是完整 7 位车牌正视图（含首位省份汉字）——脚本自动裁掉汉字区域
