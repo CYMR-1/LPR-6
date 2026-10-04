@@ -400,12 +400,34 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
           f"（候选 {len(hard_candidates)}，已排除与 base 号码重叠者）")
 
     # ---- ④ 合成域测试集 ---------------------------------------------------
+    # 后端由 synth.backend 选择：
+    #   pil_renderer   —— 内置确定性 PIL 渲染器（早期版本，保留可切回）
+    #   generator_repo —— 外部仓库 Nenger/chinese_licence_plate_generator 牌面级输出
     scfg = SynthConfig.from_config(cfg)
+    synth_backend = str(cfg.synth.get("backend", "pil_renderer"))
     synth_size = int(cfg.split.synth_test_size)
-    print(f"[P1.5] 生成合成域测试集 {synth_size} 张（种子 {scfg.seed}）…")
-    synth = generate_dataset(
-        synth_size, scfg, params, out_dir=None, verbose=True,
-    )
+    print(f"[P1.5] 生成合成域测试集 {synth_size} 张"
+          f"（后端 {synth_backend}，种子 {scfg.seed}）…")
+    if synth_backend == "generator_repo":
+        from train.synth_from_generator import (
+            generate_dataset_from_repo,
+            provenance_dict,
+            resolve_generator_dir,
+        )
+        synth = generate_dataset_from_repo(
+            synth_size, scfg, params,
+            generator_dir=resolve_generator_dir(cfg), out_dir=None, verbose=True,
+        )
+        synth_prov = provenance_dict(scfg)
+    elif synth_backend == "pil_renderer":
+        synth = generate_dataset(
+            synth_size, scfg, params, out_dir=None, verbose=True,
+        )
+        synth_prov = {"backend": "pil_renderer", **scfg.as_dict()}
+    else:
+        print(f"[P1.5] 错误：未知 synth.backend={synth_backend!r}"
+              "（可选 pil_renderer / generator_repo）")
+        return 2
     print(f"[P1.5] 合成域：images{synth.images.shape} labels{synth.labels.shape}")
 
     # ---- ⑤ 全局标准化统计量：**只用训练集**（§2.3.2） --------------------
@@ -428,7 +450,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         config=np.asarray(json.dumps({
             "preprocess_version": cfg.project.preprocess_version,
             "split_seed": int(cfg.split.split_seed),
-            "synth": scfg.as_dict(),
+            "synth": synth_prov,
             "input_size": list(params.input_size),
         }, ensure_ascii=False)),
     )
@@ -464,12 +486,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 "split_seed": int(cfg.split.split_seed),
             })
             counter += 1
-    # 合成域：来源是生成器，没有原图路径，用生成参数溯源
+    # 合成域：来源是生成器，没有原图路径，用生成后端 + 种子溯源
     for j, t in enumerate(synth.texts):
         rows.append({
             "index": counter,
             "subset": "synth",
-            "source_file": f"generated:{scfg.seed}:{j}",
+            "source_file": f"{synth_backend}:{scfg.seed}:{j}",
             "label": t,
             "label_classes": " ".join(str(int(c)) for c in synth.labels[j]),
             "split": SPLIT_SYNTH,
@@ -530,7 +552,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "standardizer": standardizer.as_dict(),
         "split_seed": int(cfg.split.split_seed),
         "preprocess_version": cfg.project.preprocess_version,
-        "synth_config": scfg.as_dict(),
+        "synth_config": synth_prov,
         "note": "合成域与强扰动集不参与任何调参决策（§2.5 要求 3）",
     }
     log_path = resolve_path(cfg, "logs_dir") / "split_summary.json"

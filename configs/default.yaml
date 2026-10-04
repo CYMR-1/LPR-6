@@ -105,9 +105,16 @@ split:
 # -----------------------------------------------------------------------------
 synth:
   # 生成后端：
-  #   pil_renderer —— 本仓库内置的确定性合成器（PIL 渲染 + 系统 CJK 字体）
-  #   generator_repo —— 外部仓库 Nenger/chinese_licence_plate_generator（需 cv2，且产出整图需检测切分）
-  backend: "pil_renderer"
+  #   generator_repo —— ★默认。外部仓库 Nenger/chinese_licence_plate_generator 的
+  #                     牌面级输出（FakePlateGenerator.generate_one_plate + 其自带
+  #                     颜色/噪声/模糊/缩放扰动链），随后走与 CCPD 完全相同的几何
+  #                     管线（裁汉字 → 缩放 → 灰度）。依赖 cv2（仅生成环节使用）。
+  #                     上游素材含字母 I/O，生成时按 34 类字符集拒绝重采。
+  #   pil_renderer   —— 早期版本的内置确定性合成器（PIL 渲染 + 系统 CJK 字体），
+  #                     代码保留、可切回，但不再是报告口径。
+  backend: "generator_repo"
+  # 生成器仓库克隆位置（相对项目根；固定 commit 43bac43，见 train/synth_from_generator.py）
+  generator_dir: "data/external/chinese_licence_plate_generator"
   seed: 2024                             # 固定生成种子（§2.4 要求 1）
   width: 128
   height: 32

@@ -44,8 +44,15 @@ reports/figs/
 # 后台任务的运行日志（过程性输出，不是结论证据）
 reports/logs/_job*.log
 
+# 外部生成器仓库（合成域测试集来源；由 clone 重建，固定 commit 见 README §3.1）
+data/external/
+
 # 参考仓库（临时核对用）
 _ref/
+
+# 本地临时目录（pip 沙盒绕行等）
+.tmp/
+.acl-recovery/
 
 # 编辑器 / 系统
 .vscode/

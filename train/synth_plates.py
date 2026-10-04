@@ -22,12 +22,15 @@
 
 两种后端
 --------
-* ``pil_renderer``（默认）：本仓库内置的确定性渲染器，依赖仅 Pillow + 系统字体；
-* ``generator_repo``：外部仓库
+* ``pil_renderer``：本模块实现的确定性渲染器（Pillow + 系统字体）。
+  属于早期版本的报告口径，代码保留、可经 ``synth.backend`` 切回；
+* ``generator_repo``（**当前默认**）：外部仓库
   `Nenger/chinese_licence_plate_generator <https://github.com/Nenger/chinese_licence_plate_generator>`_
-  的整图输出。注意它产出的是"车牌贴在背景世界图里"的整图，**必须再做检测切分**
-  才能得到 32×128 输入；本项目不做检测（§0.3），若用它则需自行提供坐标切分。
-  因此默认后端为内置渲染器，``generator_repo`` 仅作为可选扩展保留。
+  的**牌面级**输出，由 :mod:`train.synth_from_generator` 实现（直接调用其
+  ``FakePlateGenerator.generate_one_plate``，再做同一套几何裁剪；
+  上游素材含 I、O 两个字符集外字母，按 34 类字符集拒绝重采）。
+  注意：该仓库的主打产物是"车牌贴进街景图"的检测数据集，本项目不做检测
+  （§0.3），因此只使用其牌面级生成接口，不使用场景整图。
 """
 
 from __future__ import annotations
