@@ -1,0 +1,24 @@
+{
+  "run": "E2_relu_s42",
+  "n_samples": 512,
+  "fresh_relu": {
+    "never_active_frac": 0.0,
+    "mean_h": 0.5181919759623107,
+    "mean_z1": 0.036499705965997206,
+    "h_zero_frac": 0.489990234375
+  },
+  "trained_relu": {
+    "never_active_frac": 0.0625,
+    "mean_h": 0.056027890597082644,
+    "mean_z1": -110.70067966239168,
+    "h_zero_frac": 0.9953079223632812
+  },
+  "trained_sigmoid_baseline": {
+    "never_active_frac": 0.0,
+    "mean_h": 0.34734803341307946,
+    "mean_z1": -5.342034526212162,
+    "h_zero_frac": 0.0
+  },
+  "commit": "e4c15e1",
+  "dirty": true
+}

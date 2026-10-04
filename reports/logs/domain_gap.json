@@ -92,5 +92,72 @@
     "std": 0.22117652221407877,
     "fitted": true,
     "n_samples": 9000
+  },
+  "standardization_sensitivity": {
+    "checkpoint": "reports/checkpoints/baseline_s42_best.npz",
+    "checkpoint_extra": {
+      "run_name": "baseline_s42",
+      "seed": 42,
+      "val_char_acc": 0.8645833333333334
+    },
+    "n_synth": 2000,
+    "eval_backend": "numpy",
+    "params_dtype": "float32",
+    "schemes": {
+      "global_train": {
+        "char_acc": 0.05616666666666666,
+        "plate_acc": 0.0,
+        "per_position": [
+          0.0435,
+          0.0265,
+          0.077,
+          0.0775,
+          0.072,
+          0.0405
+        ],
+        "description": "train 拟合的全局 mean/std（当前方案）",
+        "standardizer": {
+          "mean": 0.4212035465296757,
+          "std": 0.22117652221407877,
+          "fitted": true,
+          "n_samples": 9000
+        }
+      },
+      "global_synth": {
+        "char_acc": 0.0545,
+        "plate_acc": 0.0,
+        "per_position": [
+          0.046,
+          0.026,
+          0.0755,
+          0.0705,
+          0.0685,
+          0.0405
+        ],
+        "description": "synth 自身拟合的全局 mean/std",
+        "standardizer": {
+          "mean": 0.5356629656322125,
+          "std": 0.260093071465419,
+          "fitted": true,
+          "n_samples": 2000
+        }
+      },
+      "per_image": {
+        "char_acc": 0.057916666666666665,
+        "plate_acc": 0.0,
+        "per_position": [
+          0.0445,
+          0.03,
+          0.076,
+          0.0855,
+          0.071,
+          0.0405
+        ],
+        "description": "逐图归一化（每图减自身均值除自身标准差）"
+      }
+    },
+    "note": "三种方案在合成域的字符准确率若都停留在 ~5%（34 类随机猜测 2.9% 附近），则'标准化统计量不匹配'可被排除（§8.1）。",
+    "commit": "e4c15e1",
+    "dirty": true
   }
 }

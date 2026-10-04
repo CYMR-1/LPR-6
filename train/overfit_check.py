@@ -26,11 +26,13 @@ lr 退火、μ 退火、二者联合退火，结论：
 1. **准确率不是瓶颈**：字符与整牌准确率在第 ~100 轮就双双到 100%。
 2. **损失才是瓶颈**：总损失是六路交叉熵之和，要 <1e-3 就得每一路都压到 ~1.7e-4。
    Sigmoid 隐层输出被限制在 ``(0,1)``，把某类概率推到 ``1-1e-4`` 只能靠大幅增大
-   输出层权重范数，于是损失按约 ``O(1/轮)`` 缓慢衰减，**需要约 1.7 万轮**。
+   输出层权重范数，于是损失按约 ``O(1/轮)`` 缓慢衰减，**需要约 1.1–1.8 万轮**。
    规格里写的"训练 400 轮"在该结构下数学上达不到 1e-3。
-3. **动量会让它更慢**：``momentum=0.9`` 使稳态速度达到 ``g/(1-μ)=10g``，参数在
-   最优解附近形成幅度固定的极限环，损失被卡在 ~2e-2 不再下降；只降 lr 而不降 μ
-   更糟（实测 400 轮从 2.2e-2 反而升到 3.5e-2）。因此这里用**纯 SGD**。
+3. **动量与纯 SGD 都能收敛**（★ 更正：早期文档声称 μ=0.9 会"卡在 ~2e-2 极限环"，
+   那只是 400 轮观察窗内的错觉；补测 ``overfit_check_mu09_lr05_20k.json``
+   显示 μ=0.9 在第 11000 轮即达 1e-3，比 μ=0 的 18000 轮更快）。本脚本仍
+   以 μ=0 为默认——它与历史产物逐位一致，作为"基准轨迹"保留；
+   ``--momentum 0.9`` 用于复现对照。
 4. 实测定标值：``lr=0.5``、``momentum=0`` 时第 **17282** 轮达到
    ``loss=1.0e-3`` 且字符准确率 100%，耗时约 150 秒（CPU）。
    故 ``epochs`` 默认给 20000 并留出余量。
@@ -54,7 +56,8 @@ if __package__ in (None, ""):
 
 from models.backend import get_backend
 from models.charset import SEQ_LEN, resolve_positions
-from models.config import ROOT, ensure_dirs, git_info, load_config, resolve_path, set_seed
+from models.config import (ROOT, apply_patch, ensure_dirs, git_info, load_config,
+                           resolve_path, set_seed)
 from models.dataset import GlobalStandardizer, PlateDataset, load_cache
 from models.model import (Params, backward, build_model, build_onehot,
                           compute_loss, forward, params_groups, predict)
@@ -124,6 +127,7 @@ def overfit_check(
     l2_lambda: Optional[float] = None,
     seed: Optional[int] = None,
     backend_name: str = "numpy",
+    momentum: Optional[float] = None,
     verbose: bool = True,
 ) -> OverfitReport:
     """在 ``n_samples`` 个样本上做"能否完美过拟合"自检。
@@ -144,6 +148,9 @@ def overfit_check(
         随机种子。
     backend_name : str
         计算后端。
+    momentum : float or None
+        动量系数 μ；``None`` 时用 ``cfg.train.overfit_check.momentum``
+        （默认 0.0，与现状一致）。``0.9`` 用于复现 §5.2 的"极限环"对照。
     verbose : bool
         是否打印进度。
 
@@ -160,7 +167,8 @@ def overfit_check(
     n_samples = int(n_samples if n_samples is not None else ok.n_samples)
     epochs = int(epochs if epochs is not None else ok.epochs)
     lr = float(lr if lr is not None else ok.learning_rate)
-    momentum = float(ok.get("momentum", 0.0))
+    # 显式传入的 momentum 优先；否则用配置值（默认 0.0，保持原行为）
+    momentum = float(ok.get("momentum", 0.0) if momentum is None else momentum)
     target_loss = float(ok.target_loss)
     target_acc = float(ok.target_char_acc)
     l2_lambda = float(0.0 if l2_lambda is None else l2_lambda)
@@ -201,13 +209,14 @@ def overfit_check(
 
     report = OverfitReport(target_loss=target_loss, target_char_acc=target_acc)
 
-    # 无 lr 退火：原因见模块 docstring 第 3 条 —— 动量的极限环才是瓶颈，
-    # 单纯降 lr 不降 μ 会让情况更糟，而 μ=0 的纯 SGD 在固定 lr 下衰减最稳。
+    # 无 lr 退火：本自检的目标是验证"损失能否被压到 ~0"，固定 lr 下的
+    # 轨迹最简单、最易复现；μ 与 lr 的对照实测见模块 docstring 第 3 条。
     for ep in range(1, epochs + 1):
         probs, cache = forward(params, x, backend, with_cache=True)
         total, parts = compute_loss(probs, targets, backend, l2_lambda=l2_lambda,
                                     params=params, head_mask=mask)
-        grads = backward(params, cache, targets, backend, l2_lambda=l2_lambda)
+        grads = backward(params, cache, targets, backend, l2_lambda=l2_lambda,
+                         head_mask=mask)
         optim.step(grads)
 
         loss = float(total)
@@ -244,8 +253,7 @@ def overfit_check(
     report.meta = {
         "n_samples": len(ds), "epochs": epochs, "lr": lr, "l2_lambda": l2_lambda,
         "momentum": momentum, "seed": seed, "backend": backend.name,
-        "lr_schedule": "无（固定 lr；动量的极限环才是瓶颈，降 lr 反而更差，"
-                       "故用 μ=0 的纯 SGD）",
+        "lr_schedule": "无（固定 lr，轨迹最易复现；μ/lr 对照见 docstring 第 3 条）",
         "arch": params.arch, "activation": params.activation,
         "hidden_dim": int(cfg.model.hidden_dim),
         "num_parameters": params.num_parameters(),
@@ -274,11 +282,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--n-samples", type=int, default=None)
     ap.add_argument("--epochs", type=int, default=None)
     ap.add_argument("--lr", type=float, default=None)
+    ap.add_argument("--momentum", type=float, default=None,
+                    help="覆盖动量系数 μ；默认取配置 train.overfit_check.momentum"
+                         "（0.0）。μ=0.9 用于复现 §5.2 的极限环对照")
     ap.add_argument("--backend", type=str, default="numpy",
                     choices=["numpy", "cupy", "auto"])
+    ap.add_argument("--activation", type=str, default=None,
+                    choices=["sigmoid", "relu"],
+                    help="覆盖 model.activation；用于核验激活函数本身是否可学")
+    ap.add_argument("--out", type=str, default=None,
+                    help="报告输出路径；默认 reports/logs/overfit_check.json")
     args = ap.parse_args(argv)
 
     cfg = load_config(args.config)
+    if args.activation:
+        # ★ apply_patch 返回**新对象**，必须接收返回值，否则补丁会被静默丢弃
+        cfg = apply_patch(cfg, {"model.activation": args.activation})
+        print(f"[overfit] 已覆盖 model.activation = {args.activation}")
     ensure_dirs(cfg)
     print("=" * 74)
     print("P3 小样本过拟合自检（§5.4 第 2 项）")
@@ -287,8 +307,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print("=" * 74)
 
     report = overfit_check(cfg, n_samples=args.n_samples, epochs=args.epochs,
-                           lr=args.lr, backend_name=args.backend)
-    out = resolve_path(cfg, "logs_dir") / "overfit_check.json"
+                           lr=args.lr, backend_name=args.backend,
+                           momentum=args.momentum)
+    out = (Path(args.out) if args.out
+           else resolve_path(cfg, "logs_dir") / "overfit_check.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w", encoding="utf-8") as fp:
         json.dump(report.as_dict(), fp, ensure_ascii=False, indent=2)

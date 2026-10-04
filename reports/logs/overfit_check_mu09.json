@@ -1,0 +1,156 @@
+{
+  "passed": false,
+  "final_loss": 0.007305271457880735,
+  "final_char_acc": 1.0,
+  "final_plate_acc": 1.0,
+  "best_loss": 0.007305656094104052,
+  "epochs_run": 20000,
+  "target_loss": 0.001,
+  "target_char_acc": 1.0,
+  "meta": {
+    "n_samples": 300,
+    "epochs": 20000,
+    "lr": 0.01,
+    "l2_lambda": 0.0,
+    "momentum": 0.9,
+    "seed": 42,
+    "backend": "numpy",
+    "lr_schedule": "无（固定 lr；动量的极限环才是瓶颈，降 lr 反而更差，故用 μ=0 的纯 SGD）",
+    "arch": "shared",
+    "activation": "sigmoid",
+    "hidden_dim": 256,
+    "num_parameters": 1101260,
+    "augmentation": "none（自检必须关增强）",
+    "commit": "e4c15e1",
+    "dirty": true,
+    "config_fingerprint": "03f02e2bf5be"
+  },
+  "curve": [
+    {
+      "epoch": 1,
+      "loss": 22.92362213,
+      "char_acc": 0.025,
+      "plate_acc": 0.0
+    },
+    {
+      "epoch": 1000,
+      "loss": 0.20882596,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 2000,
+      "loss": 0.08915623,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 3000,
+      "loss": 0.05595269,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 4000,
+      "loss": 0.04056909,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 5000,
+      "loss": 0.03176387,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 6000,
+      "loss": 0.02606964,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 7000,
+      "loss": 0.02208886,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 8000,
+      "loss": 0.01915163,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 9000,
+      "loss": 0.01689644,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 10000,
+      "loss": 0.01511136,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 11000,
+      "loss": 0.01366387,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 12000,
+      "loss": 0.01246683,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 13000,
+      "loss": 0.01146061,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 14000,
+      "loss": 0.01060321,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 15000,
+      "loss": 0.00986388,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 16000,
+      "loss": 0.00922002,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 17000,
+      "loss": 0.00865423,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 18000,
+      "loss": 0.0081532,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 19000,
+      "loss": 0.00770645,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    },
+    {
+      "epoch": 20000,
+      "loss": 0.00730566,
+      "char_acc": 1.0,
+      "plate_acc": 1.0
+    }
+  ]
+}

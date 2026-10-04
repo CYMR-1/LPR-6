@@ -41,7 +41,7 @@ if __package__ in (None, ""):
 from evaluate.model_eval import evaluate_dataset
 from models.augment import AugmentConfig, build_augment_fn
 from models.backend import (BackendInfo, get_backend, memory_info, set_backend_env)
-from models.charset import LETTER_MAX_INDEX, SEQ_LEN, resolve_positions
+from models.charset import LETTER_MAX_INDEX, NUM_CLASSES, SEQ_LEN, resolve_positions
 from models.config import (Config, ROOT, ensure_dirs, git_info, load_config,
                            resolve_path, set_seed)
 from models.dataset import GlobalStandardizer, PlateDataset, load_cache
@@ -312,13 +312,25 @@ def load_data_bundle(
     processed = resolve_path(cfg, "processed_dir")
     tag = f"ccpd_{int(cfg.ccpd.input_size[0])}x{int(cfg.ccpd.input_size[1])}"
     cache = processed / f"{tag}.npz"
-    split_path = processed / "splits.npz"
+    # ★ 划分文件名可配置：E8 的 24×96 变体用 splits_24x96.npz（合成域图像
+    # 与标准化统计量都必须在对应分辨率下重建），默认仍是 splits.npz。
+    split_path = processed / str(cfg.get("paths.splits_file", "splits.npz"))
     if not cache.exists():
         raise FileNotFoundError(f"缺少预处理缓存 {cache}，请先运行 train/phase1_prepare.py")
     if not split_path.exists():
         raise FileNotFoundError(f"缺少划分文件 {split_path}，请先运行 train/phase15_split.py")
 
     images, labels, _ = load_cache(cache)
+    # ★ 响亮防线（code_audit 缺陷 #3）：缓存标签一旦越界（<0 或 >=34），
+    # build_onehot 只会把越界位置的 one-hot 静默置零、不报错，梯度被
+    # 悄悄改变。数据入口（解析/编码）已有检查，这里补上"缓存→训练"的缺口。
+    n_bad = int(((labels < 0) | (labels >= NUM_CLASSES)).sum())
+    if n_bad:
+        bad = np.argwhere((labels < 0) | (labels >= NUM_CLASSES))[:5]
+        raise ValueError(
+            f"缓存 {cache.name} 中有 {n_bad} 个越界标签（合法范围 0..{NUM_CLASSES - 1}），"
+            f"前 5 个位置（样本, 字符位）：{bad.tolist()}。"
+            f"缓存已损坏，请重新运行 train/phase1_prepare.py")
     with np.load(split_path, allow_pickle=False) as d:
         tr = d["train"].astype(np.int64)
         va = d["val"].astype(np.int64)
@@ -398,6 +410,32 @@ class Trainer:
         # 必须用 mask 排除其损失贡献（否则会朝 one-hot 全零的方向优化）。
         self._use_head_mask = (int(self.head_dims[0]) <= LETTER_MAX_INDEX + 1)
 
+        # 监控指标的方向：名字含 "acc" 的指标越大越好，其余（loss）越小越好。
+        # ★ 缺陷修复（code_audit #2）：此前两处比较都硬编码"越小越好"，
+        #   一旦把 monitor 配成 val_char_acc，best 选择/早停/回滚会整体反向
+        #   （实测：acc 单调上升却把 acc 最低轮标为 best 并回滚到最差权重）。
+        self._monitor_maximize = ("acc" in str(tcfg.monitor))
+        self.history.best_score = (float("-inf") if self._monitor_maximize
+                                   else float("inf"))
+
+    def _is_better(self, score: float) -> bool:
+        """按监控方向判断本轮是否更优。
+
+        参数
+        ----
+        score : float
+            本轮监控指标值。
+
+        返回
+        ----
+        bool
+            更优返回 ``True``。
+        """
+        d = float(self.tcfg.early_stop_min_delta)
+        if self._monitor_maximize:
+            return score > self.history.best_score + d
+        return score < self.history.best_score - d
+
     # ------------------------------------------------------------- 辅助
     def _head_mask(self, labels: np.ndarray) -> Optional[List[np.ndarray]]:
         """构造逐头掩码：首位越界的样本在 head0 上权重为 0。
@@ -463,7 +501,8 @@ class Trainer:
                 params=params, loss_type=tcfg.loss_type, head_mask=hm,
             )
             grads = backward(params, cache, targets, backend,
-                             l2_lambda=tcfg.l2_lambda, loss_type=tcfg.loss_type)
+                             l2_lambda=tcfg.l2_lambda, loss_type=tcfg.loss_type,
+                             head_mask=hm)
 
             if tcfg.clip_grad_norm is not None:
                 grads = clip_gradients(grads, float(tcfg.clip_grad_norm))
@@ -498,7 +537,7 @@ class Trainer:
         bool
             应停止返回 ``True``。
         """
-        better = score < self.history.best_score - self.tcfg.early_stop_min_delta
+        better = self._is_better(score)
         if better:
             self.history.best_score = float(score)
             self.history.best_epoch = self.history.stopped_epoch
@@ -605,7 +644,7 @@ class Trainer:
                 )
 
                 score = float(row.get(tcfg.monitor, m.loss))
-                is_best = score < self.history.best_score - tcfg.early_stop_min_delta
+                is_best = self._is_better(score)
                 row["is_best"] = int(is_best)
                 row["epoch_seconds"] = round(time.perf_counter() - t0, 3)
                 self.history.append(row)

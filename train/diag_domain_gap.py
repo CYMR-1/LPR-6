@@ -37,9 +37,11 @@ import numpy as np
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from models.config import load_config, resolve_path  # noqa: E402
+from models.backend import get_backend  # noqa: E402
+from models.config import git_info, load_config, resolve_path  # noqa: E402
 from models.dataset import GlobalStandardizer, load_cache  # noqa: E402
 from models.charset import decode_batch  # noqa: E402
+from models.model import Params, forward, predict  # noqa: E402
 
 
 def load_splits(cfg) -> Dict[str, np.ndarray]:
@@ -183,6 +185,145 @@ def scale_stats(images: np.ndarray, std: Optional[Dict[str, float]]
     return res
 
 
+# =============================================================================
+# 追加分析（§8.1 证据补齐）：标准化方案敏感性
+# =============================================================================
+
+
+def _eval_char_acc(params, x: np.ndarray, y: np.ndarray, batch: int = 512
+                   ) -> Dict[str, Any]:
+    """在已标准化的输入上评测字符/整牌/逐位置准确率（numpy 后端）。
+
+    参数
+    ----
+    params : Params
+        模型参数（baseline 为 float32）。
+    x : numpy.ndarray
+        已标准化并展平的输入，形状 ``(N, D)``，float32。
+    y : numpy.ndarray
+        标签，形状 ``(N, 6)``，int64。
+    batch : int
+        评测批大小。
+
+    返回
+    ----
+    dict
+        ``{"char_acc", "plate_acc", "per_position"}``；``per_position``
+        为长度 6 的逐位置字符准确率。
+
+    形状
+    ----
+    ``(N, D)`` + ``(N, 6)`` -> 标量指标
+    """
+    backend = get_backend("numpy", verbose=False)  # 铁律：评测用 numpy 后端
+    n = int(x.shape[0])
+    preds_all = []
+    for s in range(0, n, batch):
+        xb = x[s:s + batch]
+        probs, _ = forward(params, xb, backend, with_cache=False)
+        preds, _ = predict(probs, backend)
+        preds_all.append(preds)
+    pred = np.concatenate(preds_all, axis=0)              # (N, 6) int64
+    correct = pred == y
+    return {
+        "char_acc": float(correct.mean()),
+        "plate_acc": float(correct.all(axis=1).mean()),
+        "per_position": [float(v) for v in correct.mean(axis=0)],
+    }
+
+
+def standardization_sensitivity(cfg, sp: Dict[str, Any]) -> Dict[str, Any]:
+    """三种标准化方案下 baseline 在合成域的字符准确率（§8.1 的排除证据）。
+
+    报告 §8.1 声称"三种标准化方案在合成域都只有 ~5%（逐图归一化 4.78% vs
+    4.94%）"，但此前没有 JSON 产物。本函数补齐该证据：加载
+    ``reports/checkpoints/baseline_s42_best.npz``（float32 训练产物），
+    对 synth_test 全部 2000 张分别用三种方案评测：
+
+    * ``global_train``：当前方案，用 **train 拟合**的全局 mean/std（来自
+      ``splits.npz`` 的 ``standardizer`` 键）；
+    * ``global_synth``：用 **synth 自身拟合**的全局 mean/std；
+    * ``per_image``：逐图归一化（每图减自身均值、除自身标准差）。
+
+    输入一律为 ``uint8 / 255`` 后的 ``[0, 1]`` 图像，再按方案做
+    ``(x - mean) / std``（评测口径与训练一致）。
+
+    参数
+    ----
+    cfg : Config
+        全局配置（用于定位 checkpoint）。
+    sp : dict
+        :func:`load_splits` 的输出，须含 ``synth_images``、``synth_labels``
+        与 ``std``（train 拟合标准化器字典）。
+
+    返回
+    ----
+    dict
+        三个方案的指标 + checkpoint 元信息 + commit/dirty。
+
+    形状
+    ----
+    图像 ``(2000, 32, 128) uint8`` -> 三种 ``(2000, 4096) float32`` 输入
+    -> 三组标量指标
+    """
+    ckpt = resolve_path(cfg, "models_dir") / "baseline_s42_best.npz"
+    # ★ Params.load 是 classmethod，返回 (params, extra)，必须接收两个返回值
+    params, extra = Params.load(ckpt)
+
+    images = np.asarray(sp["synth_images"])                  # (N, 32, 128) uint8
+    labels = np.asarray(sp["synth_labels"]).astype(np.int64)  # (N, 6)
+    n = int(images.shape[0])
+    x01 = images.astype(np.float32) / 255.0                  # (N, 32, 128) [0,1]
+
+    # (a) 当前方案：train 拟合的全局 mean/std
+    std_train = GlobalStandardizer.from_dict(sp["std"])
+    x_a = std_train.transform(x01).reshape(n, -1).astype(np.float32)
+
+    # (b) 用 synth 自身拟合的全局 mean/std
+    std_synth = GlobalStandardizer.fit(x01)
+    x_b = std_synth.transform(x01).reshape(n, -1).astype(np.float32)
+
+    # (c) 逐图归一化：每图减自身均值、除自身标准差（eps 防除零）
+    mu = x01.mean(axis=(1, 2), keepdims=True)                # (N, 1, 1)
+    sg = np.maximum(x01.std(axis=(1, 2), keepdims=True), 1e-8)
+    x_c = ((x01 - mu) / sg).reshape(n, -1).astype(np.float32)
+
+    schemes = {
+        "global_train": ("train 拟合的全局 mean/std（当前方案）", x_a,
+                         std_train.as_dict()),
+        "global_synth": ("synth 自身拟合的全局 mean/std", x_b,
+                         std_synth.as_dict()),
+        "per_image": ("逐图归一化（每图减自身均值除自身标准差）", x_c, None),
+    }
+    results: Dict[str, Any] = {}
+    for name, (desc, x, std_dict) in schemes.items():
+        m = _eval_char_acc(params, x, labels)
+        m["description"] = desc
+        if std_dict is not None:
+            m["standardizer"] = std_dict
+        results[name] = m
+        print(f"  [标准化敏感性] {name:13s} 字符准确率 {m['char_acc'] * 100:6.2f}%  "
+              f"整牌 {m['plate_acc'] * 100:5.2f}%")
+
+    gi = git_info()
+    return {
+        "checkpoint": "reports/checkpoints/baseline_s42_best.npz",
+        "checkpoint_extra": {
+            "run_name": extra.get("run_name"),
+            "seed": extra.get("seed"),
+            "val_char_acc": extra.get("val_char_acc"),
+        },
+        "n_synth": n,
+        "eval_backend": "numpy",
+        "params_dtype": str(params.W1.dtype),
+        "schemes": results,
+        "note": ("三种方案在合成域的字符准确率若都停留在 ~5%（34 类随机猜测 "
+                 "2.9% 附近），则'标准化统计量不匹配'可被排除（§8.1）。"),
+        "commit": gi.commit,
+        "dirty": gi.dirty,
+    }
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """命令行入口。
 
@@ -222,9 +363,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "standardizer_used": std,
     }
 
+    # ---- 追加分析：标准化方案敏感性（§8.1 证据补齐） ------------------------
+    report["standardization_sensitivity"] = standardization_sensitivity(cfg, sp)
+
     out = (Path(args.out) if args.out
            else resolve_path(cfg, "logs_dir") / "domain_gap.json")
     out.parent.mkdir(parents=True, exist_ok=True)
+    # 读取现有 JSON → 加键/更新键 → 写回：已有键一律保留（幂等，
+    # 重复运行结果一致；旧文件中本脚本不认识的键也不会丢失）
+    if out.exists():
+        try:
+            old = json.loads(out.read_text(encoding="utf-8"))
+            if isinstance(old, dict):
+                old.update(report)
+                report = old
+        except Exception:
+            pass  # 旧文件损坏时以本次计算结果为准
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2),
                    encoding="utf-8")
 
@@ -244,6 +398,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(f"标准化后标准差：真实 "
           f"{report['scale_real'].get('norm_std_sigma', float('nan')):.3f}"
           f"  合成 {report['scale_synth'].get('norm_std_sigma', float('nan')):.3f}")
+    ss = report["standardization_sensitivity"]
+    print(f"\n标准化方案敏感性（合成域 {ss['n_synth']} 张，baseline_s42_best）：")
+    for k, v in ss["schemes"].items():
+        print(f"  {k:14s} 字符准确率 {v['char_acc'] * 100:6.2f}%  "
+              f"整牌 {v['plate_acc'] * 100:5.2f}%")
     print(f"\n已写出：{out}")
     return 0
 

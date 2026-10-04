@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import statistics
 import sys
 import time
@@ -258,6 +259,63 @@ def _get_metric(result: Dict[str, Any], split: str, metric: str) -> Optional[flo
         return None
     v = block.get(metric)
     return float(v) if isinstance(v, (int, float)) else None
+
+
+_RUN_NAME_RE = re.compile(
+    r"^(?:(e4n|smoke|verify|e2lr)_)?(E\d+|baseline)_(.+)_s(\d+)$")
+
+
+def scan_runs_from_disk(cfg: Config) -> List[Dict[str, Any]]:
+    """从 ``logs_dir`` 扫描全部 ``*_run.json``，重建结果列表供 CSV 汇总。
+
+    ★ 为什么从磁盘重建：按"本次进程跑到的运行"写 CSV 时，``skip_existing``
+    跳过的运行会从汇总表里消失（exp_E4 的 batch_1 行曾因此丢失）；磁盘扫描
+    保证 CSV 始终是**当前全部产物的完整镜像**，且 seed 从运行名解析、
+    不再依赖进程内传参。探针/冒烟/验证运行（``smoke_``/``verify_``/``e2lr_``
+    前缀）不计入。
+
+    参数
+    ----
+    cfg : Config
+        全局配置（用于定位 ``logs_dir``）。
+
+    返回
+    ----
+    list of dict
+        与 ``run_training`` 返回值同构的列表，额外含
+        ``run_name`` / ``exp`` / ``variant`` / ``seed``。
+
+    形状
+    ----
+    ``*_run.json`` 文件集 -> 结果列表
+    """
+    logs = resolve_path(cfg, "logs_dir")
+    out: List[Dict[str, Any]] = []
+    for p in sorted(logs.glob("*_run.json")):
+        name = p.name[: -len("_run.json")]
+        m = _RUN_NAME_RE.match(name)
+        if not m:
+            continue                      # 非实验命名（如 e2lr 探针以外的临时运行）
+        prefix, exp, variant, seed = m.groups()
+        if prefix in ("smoke", "verify", "e2lr"):
+            continue                      # 探针与验证运行不进汇总表
+        with open(p, encoding="utf-8") as fp:
+            r = json.load(fp)
+        # run.json 的逐位准确率是扁平键 per_position_0..5，还原成列表
+        test = r.get("test") or {}
+        if "per_position" not in test:
+            pp = [test[f"per_position_{i}"] for i in range(6)
+                  if f"per_position_{i}" in test]
+            if pp:
+                test["per_position"] = pp
+                r["test"] = test
+        r["run_name"] = name
+        r["exp"] = exp
+        # 前缀并入变体名，避免 e4n_（2000 张口径）与主口径同名变体被聚合到一起
+        r["variant"] = f"{prefix}_{variant}" if prefix else variant
+        r["seed"] = seed
+        out.append(r)
+    return out
 
 
 def write_runs_csv(results: List[Dict[str, Any]], path: Path) -> None:
@@ -758,24 +816,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     tables.mkdir(parents=True, exist_ok=True)
 
     if not results:
-        print("[run_all] 没有任何成功的运行。")
-        return 1
+        print("[run_all] 本次没有新执行/成功的运行；仍会从磁盘重建汇总表。")
 
-    # 逐实验汇总
+    # 逐实验汇总：★ 永远从磁盘全量重建，避免 skip_existing 跳过的运行
+    # 从汇总表中消失（历史缺陷：exp_E4 缺 batch_1、all_experiments 只剩
+    # 本次跑到的运行）。
     agg_all: List[Dict[str, Any]] = []
-    for exp in exps:
-        sub = [r for r in results if r.get("exp") == exp]
-        if not sub:
-            continue
+    disk = scan_runs_from_disk(cfg)
+    for exp in sorted({r["exp"] for r in disk}):
+        sub = [r for r in disk if r["exp"] == exp]
         write_runs_csv(sub, tables / f"exp_{exp}_runs.csv")
         rows = aggregate(sub)
         write_summary_csv(rows, tables / f"exp_{exp}_summary.csv")
         agg_all.extend(rows)
-        if not args.no_plot:
-            make_plots(cfg, rows, exp)
 
-    write_runs_csv(results, tables / "all_experiments_runs.csv")
+    write_runs_csv(disk, tables / "all_experiments_runs.csv")
     write_summary_csv(agg_all, tables / "all_experiments_summary.csv")
+
+    # 本次实际执行的运行仍单独作图（避免把磁盘上全部历史运行都重画一遍）
+    if not args.no_plot:
+        for exp in exps:
+            sub = [r for r in results if r.get("exp") == exp]
+            if sub:
+                make_plots(cfg, aggregate(sub), exp)
 
     payload = {
         "commit": git_info().commit,

@@ -165,7 +165,8 @@ def load_standardizer(cfg) -> GlobalStandardizer:
     GlobalStandardizer
         含 mean / std / n_samples 的标准化器。
     """
-    split_path = resolve_path(cfg, "processed_dir") / "splits.npz"
+    split_name = str(cfg.get("paths.splits_file", "splits.npz"))
+    split_path = resolve_path(cfg, "processed_dir") / split_name
     with np.load(split_path, allow_pickle=False) as d:
         return GlobalStandardizer.from_dict(json.loads(str(d["standardizer"])))
 
@@ -190,8 +191,16 @@ def build_datasets(cfg, standardizer: GlobalStandardizer) -> Dict[str, PlateData
     每个数据集 ``images (N, 32, 128)``，``labels (N, 6)``。
     """
     processed = resolve_path(cfg, "processed_dir")
-    images, labels, _ = load_cache(processed / "ccpd_128x32.npz")
-    with np.load(processed / "splits.npz", allow_pickle=False) as d:
+    # ★ 缓存与划分文件都要按配置取：E8 的 24×96 变体使用
+    # ccpd_96x24.npz + splits_24x96.npz，不能写死 128x32 / splits.npz。
+    tag = f"ccpd_{int(cfg.ccpd.input_size[0])}x{int(cfg.ccpd.input_size[1])}"
+    split_name = str(cfg.get("paths.splits_file", "splits.npz"))
+    images, labels, _ = load_cache(processed / f"{tag}.npz")
+    # ★ 响亮防线（与 train.load_data_bundle 相同）：越界标签必须报错，
+    # 不能在 one-hot 阶段被静默置零。
+    if int(((labels < 0) | (labels >= 34)).sum()):
+        raise ValueError(f"缓存 {tag}.npz 中存在越界标签（合法范围 0..33），缓存已损坏")
+    with np.load(processed / split_name, allow_pickle=False) as d:
         out: Dict[str, PlateDataset] = {}
         for key in ("train", "val", "test", "hard"):
             idx = d[key].astype(np.int64)

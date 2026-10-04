@@ -226,6 +226,17 @@ def run_build(
         return (np.zeros((0, h, w), dtype=np.uint8),
                 np.zeros((0, SEQ_LEN), dtype=np.int64), [], [], stats)
 
+    # ★ 可复现性修复：多进程时上面按"完成顺序"收集结果，顺序随运行时机而变，
+    #    导致同一数据集两次跑出的缓存样本顺序不同（E8 重建 24×96 缓存时实测
+    #    25592/28341 个位置不同）。划分文件按下标引用样本，顺序不定 ⇒
+    #    重建数据后训练轨迹无法逐位复现。这里统一按 sources 字典序排序，
+    #    保证任何机器、任何并行度下产出**逐位一致**的缓存。
+    order = sorted(range(len(sources)), key=lambda i: sources[i])
+    images = [images[i] for i in order]
+    labels = [labels[i] for i in order]
+    metas = [metas[i] for i in order]
+    sources = [sources[i] for i in order]
+
     return (np.stack(images, axis=0), np.stack(labels, axis=0),
             metas, sources, stats)
 
@@ -317,6 +328,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     # 过滤统计落盘
     log_path = resolve_path(cfg, "logs_dir") / "prepare_stats.json"
+    if tag != "ccpd_128x32":
+        # ★ 非主分辨率的统计不得覆盖主口径文件（E8 的 24×96 曾把
+        # prepare_stats.json 覆盖成自己的口径——与 split_summary 同款坑）
+        log_path = log_path.with_name(f"prepare_stats_{tag.replace('ccpd_', '')}.json")
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, "w", encoding="utf-8") as fp:
         json.dump(meta_blob, fp, ensure_ascii=False, indent=2)

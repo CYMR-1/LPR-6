@@ -21,9 +21,9 @@
     "hidden_dim": 256,
     "num_parameters": 1101260,
     "augmentation": "none（自检必须关增强）",
-    "commit": "26663fa",
+    "commit": "e4c15e1",
     "dirty": true,
-    "config_fingerprint": "b4dbcc5fa756"
+    "config_fingerprint": "03f02e2bf5be"
   },
   "curve": [
     {

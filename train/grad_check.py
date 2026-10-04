@@ -49,7 +49,7 @@ if __package__ in (None, ""):
 
 from models.backend import get_backend
 from models.charset import NUM_CLASSES, SEQ_LEN, resolve_positions
-from models.config import ROOT, git_info, load_config, resolve_path
+from models.config import ROOT, apply_patch, git_info, load_config, resolve_path
 from models.model import (
     Params,
     backward,
@@ -393,7 +393,8 @@ def check_gradients(
         params=params, loss_type=loss_type, head_mask=head_mask,
     )
     grads = backward(params, cache, targets, backend,
-                     l2_lambda=l2_lambda, loss_type=loss_type)
+                     l2_lambda=l2_lambda, loss_type=loss_type,
+                     head_mask=head_mask)
 
     report = GradCheckReport(tol=float(tol), abs_tol=float(abs_tol))
     report.per_head_ce = {
@@ -463,10 +464,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     help="绝对误差阈值，兜底接近 0 的梯度分量")
     ap.add_argument("--arch", type=str, default=None, choices=["shared", "independent", "both"],
                     help="检查哪种结构")
+    ap.add_argument("--activation", type=str, default=None,
+                    choices=["sigmoid", "relu"],
+                    help="覆盖 model.activation；输出文件名会带上激活名以免覆盖默认结果")
+    ap.add_argument("--out-tag", type=str, default=None,
+                    help="输出文件名附加标签（如 e9_194），避免覆盖基线结果")
     ap.add_argument("--hidden-dim", type=int, default=None)
     args = ap.parse_args(argv)
 
     cfg = load_config(args.config)
+    if args.activation:
+        # ★ apply_patch 返回新对象，必须接收返回值
+        cfg = apply_patch(cfg, {"model.activation": args.activation})
     gc = cfg.grad_check
 
     n_samples = int(args.n_samples if args.n_samples is not None else gc.n_samples)
@@ -489,6 +498,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     rng = np.random.default_rng(seed)
     x = rng.normal(0.0, 1.0, size=(n_samples, input_dim)).astype(np.float64)
     labels = rng.integers(0, NUM_CLASSES, size=(n_samples, SEQ_LEN)).astype(np.int64)
+
+    # ★ 逐头掩码始终构造（labels < 该头类别数）：基线 34×6 时全 1、不改变数值，
+    #   E9 的 194 节点结构下则**正是训练时的真实语义**（首位数字样本被掩盖）。
+    #   这样 masked 反向路径在每次校验中都被覆盖——此前 mask 只进损失不进
+    #   反向时，E9 结构下该校验必然 FAIL（code_audit 缺陷 #1 的复现路径）。
+    head_dims_for_mask = resolve_positions(cfg.charset.positions)
+    head_mask = [
+        (labels[:, i] < int(c)).astype(np.float64)
+        for i, c in enumerate(head_dims_for_mask)
+    ]
 
     arches = ["shared", "independent"] if args.arch in (None, "both") else [args.arch]
 
@@ -520,7 +539,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             params, x, labels, backend,
             l2_lambda=l2, loss_type=loss_type,
             n_per_param=n_checks, epsilon=epsilon, tol=tol, abs_tol=abs_tol,
-            seed=seed,
+            seed=seed, head_mask=head_mask,
         )
         gi = git_info()
         rep.meta = {
@@ -548,7 +567,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"      [{flag}] {g:8s} n={int(st['n']):3d}  "
                   f"max_rel={st['max_rel_err']:.3e}  max_abs={st['max_abs_err']:.3e}")
 
-        out = resolve_path(cfg, "logs_dir") / f"grad_check_{arch}.json"
+        act_suffix = "" if str(cfg.model.activation) == "sigmoid" else f"_{cfg.model.activation}"
+        tag_suffix = f"_{args.out_tag}" if args.out_tag else ""
+        out = resolve_path(cfg, "logs_dir") / f"grad_check_{arch}{act_suffix}{tag_suffix}.json"
         out.parent.mkdir(parents=True, exist_ok=True)
         with open(out, "w", encoding="utf-8") as fp:
             json.dump(rep.as_dict(), fp, ensure_ascii=False, indent=2)

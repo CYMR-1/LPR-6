@@ -32,6 +32,9 @@ paths:
   processed_dir: "data/processed"        # .npz 预处理缓存
   manifest: "data/manifest.csv"          # 每张图可追溯的来源记录
   ccpd_readme: "data/CCPD_README.md"     # 官方 README 存档（字符映射核对依据）
+  # 划分文件名。默认 splits.npz；E8 的 24×96 变体必须用 splits_24x96.npz
+  # （合成域图像与标准化统计量都随分辨率重建，划分索引保持一致）
+  splits_file: "splits.npz"
   models_dir: "reports/checkpoints"
   logs_dir: "reports/logs"
   figs_dir: "reports/figs"
@@ -368,7 +371,7 @@ experiments:
     question: "32×128 与 24×96 的精度/推理时间权衡"
     variants:
       size_32x128:   { "ccpd.input_size": [128, 32], "model.input_dim": 4096 }
-      size_24x96:    { "ccpd.input_size": [96, 24],  "model.input_dim": 2304 }
+      size_24x96:    { "ccpd.input_size": [96, 24],  "model.input_dim": 2304, "paths.splits_file": "splits_24x96.npz" }
     seeds: [42, 43, 44]
 
   E9:                                     # 首位类别数

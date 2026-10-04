@@ -699,6 +699,7 @@ def backward_shared(
     l2_lambda: float = 0.0,
     loss_type: str = "cross_entropy",
     loss_scale: float = 1.0,
+    head_mask: Optional[Sequence] = None,
 ) -> Dict[str, np.ndarray]:
     """共享模型的**手写反向传播**（§5.2 逐条对应）。
 
@@ -711,6 +712,10 @@ def backward_shared(
          （因为 ``∂L/∂v = (y−d) ⊙ σ'(v)``，Softmax 的雅可比在此按对角近似，
          这是 §4.2 所批评的"MSE + Softmax 梯度饱和"现象的直接体现，
          也正是 E3 要观察的对象）
+       * 若给了 ``head_mask``：``δ_i ← δ_i ⊙ mask_i``（被掩盖样本的梯度置零，
+         与 :func:`compute_loss` 中的 ``ce_i * mask`` 严格对应——
+         ★ 历史上 mask 只进损失不进反向，导致两者不一致，梯度校验在 E9
+         的 194 节点结构下必然 FAIL；修复后两侧一致）
 
     ② 输出头梯度：``∂L/∂W2_i = hᵀδ_i + λW2_i``，``∂L/∂b2_i = Σ_batch δ_i``
     ③ 回传共享隐层：``∂L/∂h = Σ_i δ_i W2_iᵀ``（**六路累加**）
@@ -733,6 +738,8 @@ def backward_shared(
         ``cross_entropy`` 或 ``mse``。
     loss_scale : float
         额外缩放系数，默认 1（损失已按 batch 平均）。
+    head_mask : Sequence or None
+        长度 6 的 0/1 掩码列表，各 ``(B,)``；被掩盖样本不参与该头的梯度。
 
     返回
     ----
@@ -764,6 +771,11 @@ def backward_shared(
             raise ValueError(f"不支持的损失类型 {loss_type!r}")
         if loss_scale != 1.0:
             delta = delta * float(loss_scale)
+        if head_mask is not None:
+            m = head_mask[i]
+            if not type(m).__module__.startswith("cupy"):
+                m = to_device(np.asarray(m), backend)
+            delta = delta * m.reshape(-1, 1)
         deltas.append(delta)
 
     # ---- ② 输出头梯度 + ③ 回传隐层（六路累加） ---------------------------
@@ -808,6 +820,7 @@ def backward_independent(
     l2_lambda: float = 0.0,
     loss_type: str = "cross_entropy",
     loss_scale: float = 1.0,
+    head_mask: Optional[Sequence] = None,
 ) -> Dict[str, np.ndarray]:
     """六个独立 MLP 的**手写反向传播**（E1 对照，§3.2）。
 
@@ -829,6 +842,9 @@ def backward_independent(
         损失类型。
     loss_scale : float
         额外缩放系数。
+    head_mask : Sequence or None
+        长度 6 的 0/1 掩码列表，各 ``(B,)``；与 :func:`backward_shared`
+        中的语义一致（掩盖样本的梯度置零）。
 
     返回
     ----
@@ -856,6 +872,11 @@ def backward_independent(
             delta = (diff * y * (1.0 - y)) / B
         if loss_scale != 1.0:
             delta = delta * float(loss_scale)
+        if head_mask is not None:
+            m = head_mask[i]
+            if not type(m).__module__.startswith("cupy"):
+                m = to_device(np.asarray(m), backend)
+            delta = delta * m.reshape(-1, 1)
 
         W2 = to_device(params.W2[i], backend)
         h = cache.h[i]
@@ -893,12 +914,13 @@ def backward(
     l2_lambda: float = 0.0,
     loss_type: str = "cross_entropy",
     loss_scale: float = 1.0,
+    head_mask: Optional[Sequence] = None,
 ) -> Dict[str, np.ndarray]:
     """按结构分派到对应的手写反向传播。
 
     参数
     ----
-    params, cache, targets, backend, l2_lambda, loss_type, loss_scale
+    params, cache, targets, backend, l2_lambda, loss_type, loss_scale, head_mask
         含义见 :func:`backward_shared` / :func:`backward_independent`。
 
     返回
@@ -913,10 +935,10 @@ def backward(
     if params.arch == "shared":
         return backward_shared(params, cache, targets, backend,
                                l2_lambda=l2_lambda, loss_type=loss_type,
-                               loss_scale=loss_scale)
+                               loss_scale=loss_scale, head_mask=head_mask)
     return backward_independent(params, cache, targets, backend,
                                 l2_lambda=l2_lambda, loss_type=loss_type,
-                                loss_scale=loss_scale)
+                                loss_scale=loss_scale, head_mask=head_mask)
 
 
 # =============================================================================

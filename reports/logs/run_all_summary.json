@@ -1,15 +1,17 @@
 {
-  "commit": "eee708e",
+  "commit": "e4c15e1",
   "dirty": true,
   "experiments": [
-    "E4"
+    "E2",
+    "E5",
+    "E6"
   ],
   "seeds": null,
-  "limit": 2000,
+  "limit": null,
   "epochs": null,
-  "prefix": "e4n_",
+  "prefix": "",
   "smoke": false,
-  "n_runs_ok": 12,
+  "n_runs_ok": 24,
   "n_runs_failed": 0,
   "failures": [],
   "tables": {

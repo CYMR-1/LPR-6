@@ -325,6 +325,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(description="P1.5：号码去重划分 + 合成域 + 强扰动")
     ap.add_argument("--config", type=str, default=None)
     ap.add_argument("--force", action="store_true", help="覆盖已存在的划分产物")
+    ap.add_argument("--out-name", type=str, default="splits.npz",
+                    help="划分文件名；E8 的 24×96 口径用 splits_24x96.npz，"
+                         "避免覆盖主划分")
+    ap.add_argument("--skip-manifest", action="store_true",
+                    help="不写 manifest.csv（E8 重建划分时用：主 manifest 属于"
+                         " 32×128 口径，不能被覆盖）")
     args = ap.parse_args(argv)
 
     cfg = load_config(args.config)
@@ -401,7 +407,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
           f"std={standardizer.std:.6f}（n={standardizer.n_samples}，仅训练集）")
 
     # ---- ⑥ 保存划分与标准化器 --------------------------------------------
-    split_path = processed / "splits.npz"
+    split_path = processed / str(args.out_name)
+    if split_path.exists() and not args.force:
+        print(f"[P1.5] 错误：{split_path} 已存在；如需覆盖请加 --force")
+        return 2
     np.savez_compressed(
         split_path,
         train=train_idx, val=val_idx, test=test_idx, hard=hard_idx,
@@ -472,8 +481,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         counter += 1
 
     manifest_path = resolve_path(cfg, "manifest")
-    _write_manifest_rows(manifest_path, rows)
-    print(f"[P1.5] manifest 已写出：{manifest_path}（{len(rows)} 行）")
+    if args.skip_manifest:
+        print("[P1.5] --skip-manifest：跳过 manifest.csv 写出"
+              "（主 manifest 属于 32×128 口径，不覆盖）")
+    else:
+        _write_manifest_rows(manifest_path, rows)
+        print(f"[P1.5] manifest 已写出：{manifest_path}（{len(rows)} 行）")
 
     # ---- ⑧ 泄漏自检与摘要 -------------------------------------------------
     base_split_assignment = (
@@ -513,6 +526,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "note": "合成域与强扰动集不参与任何调参决策（§2.5 要求 3）",
     }
     log_path = resolve_path(cfg, "logs_dir") / "split_summary.json"
+    if str(args.out_name) != "splits.npz":
+        # ★ 非主划分（如 E8 的 splits_24x96.npz）不得覆盖主摘要，
+        # 否则主口径的标准化统计量会被别的分辨率覆盖（实测踩坑）。
+        log_path = log_path.with_name(
+            "split_summary_" + Path(str(args.out_name)).stem.replace("splits_", "") + ".json")
     with open(log_path, "w", encoding="utf-8") as fp:
         json.dump(summary, fp, ensure_ascii=False, indent=2)
     print(f"[P1.5] 划分摘要已写出：{log_path}")

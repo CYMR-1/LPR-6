@@ -36,9 +36,14 @@ from models.config import load_config, resolve_path  # noqa: E402
 REPORT_MARKERS = {
     "baseline": "<!-- TABLE:BASELINE -->",
     "e1": "<!-- TABLE:E1 -->",
+    "e2": "<!-- TABLE:E2 -->",
     "e3": "<!-- TABLE:E3 -->",
     "e4": "<!-- TABLE:E4 -->",
+    "e5": "<!-- TABLE:E5 -->",
+    "e6": "<!-- TABLE:E6 -->",
     "e7": "<!-- TABLE:E7 -->",
+    "e8": "<!-- TABLE:E8 -->",
+    "e9": "<!-- TABLE:E9 -->",
     "midtrain": "<!-- TABLE:MIDTRAIN -->",
     "ranking": "<!-- TABLE:RANKING -->",
     "position": "<!-- TABLE:POSITION -->",
@@ -319,6 +324,10 @@ def table_cpu(runs: Sequence[Dict[str, Any]]) -> str:
 def table_ranking(runs: Sequence[Dict[str, Any]]) -> str:
     """按"测试集整牌准确率"给全部运行排名，便于一眼看出最优配置。
 
+    ★ 排名表只收正式实验运行：``smoke_`` / ``verify_`` / ``e2lr_`` 这类
+    冒烟测试、结构核验与补充探针不参与排名（它们有的只跑了 2 轮、
+    有的用了规格之外的超参，混进来会误导读者）。
+
     参数
     ----
     runs : list of dict
@@ -329,13 +338,17 @@ def table_ranking(runs: Sequence[Dict[str, Any]]) -> str:
     str
         Markdown 表格。
     """
+    skip_prefixes = ("smoke_", "verify_", "e2lr_")
     rows = []
     for r in runs:
+        name = str(r["run_name"])
+        if name.startswith(skip_prefixes):
+            continue
         tp = _acc(r, "test", "plate_acc")
         tc = _acc(r, "test", "char_acc")
         if tp is None:
             continue
-        rows.append((r["run_name"], tc, tp,
+        rows.append((name, tc, tp,
                      _acc(r, "hard_test", "char_acc"),
                      _acc(r, "synth_test", "char_acc"),
                      r.get("epochs_run")))
@@ -466,12 +479,25 @@ def build_all(cfg) -> Dict[str, str]:
                      if base else "*（暂无基线结果）*\n"),
         "e1": table_experiment(runs_of(runs, "E1_"), "E1",
                                "E1 共享六头 vs 六个独立 MLP", anchor="E1"),
+        "e2": table_experiment(runs_of(runs, "E2_"), "E2",
+                               "E2 激活函数：sigmoid vs relu（固定 lr=0.05）",
+                               anchor="E2"),
         "e3": table_experiment(runs_of(runs, "E3_"), "E3",
                                "E3 交叉熵 vs 平方误差", anchor="E3"),
         "e4": table_experiment(runs_of(runs, "E4_"), "E4",
                                "E4 批量大小 / SGD / 小批量", anchor="E4"),
+        "e5": table_experiment(runs_of(runs, "E5_"), "E5",
+                               "E5 动量：(μ=0, lr=0.01) vs (μ=0.9, lr=0.05)",
+                               anchor="E5"),
+        "e6": table_experiment(runs_of(runs, "E6_"), "E6",
+                               "E6 L2 正则强度", anchor="E6"),
         "e7": table_experiment(runs_of(runs, "E7_"), "E7",
                                "E7 数据增强强度", anchor="E7"),
+        "e8": table_experiment(runs_of(runs, "E8_"), "E8",
+                               "E8 输入尺寸 32×128 vs 24×96", anchor="E8"),
+        "e9": table_experiment(runs_of(runs, "E9_"), "E9",
+                               "E9 输出头类别约束（34×6 vs 24+34×5）",
+                               anchor="E9"),
         "midtrain": table_midtrain(runs),
         "ranking": table_ranking(runs),
         "position": table_position(base),
