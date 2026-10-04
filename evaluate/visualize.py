@@ -220,7 +220,9 @@ def plot_training_curves(
         "val_loss": "验证损失",
         "train_char_acc": "训练字符准确率",
         "val_char_acc": "验证字符准确率",
+        "val_plate_acc": "验证整牌准确率",
         "val_seq_acc": "验证整牌准确率",
+        "train_plate_acc": "训练整牌准确率",
         "lr": "学习率",
     }
     for ax, m in zip(axes, metrics):

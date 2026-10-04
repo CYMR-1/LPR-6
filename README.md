@@ -75,12 +75,18 @@ projectX/
 │  ├─ phase1_prepare.py           # P1：CCPD 解析 + 裁剪 + 过滤统计
 │  ├─ phase15_split.py            # P1.5：号码去重划分 + 合成测试集生成
 │  ├─ synth_plates.py             # 合成域测试集生成器（PIL 确定性渲染）
-│  └─ grad_check.py               # 数值梯度检查
+│  ├─ grad_check.py               # 数值梯度检查
+│  ├─ overfit_check.py            # 小样本过拟合自检
+│  ├─ diag_augment.py             # 诊断：逐算子量化增强的破坏程度
+│  └─ diag_domain_gap.py          # 诊断：真实域 vs 合成域的差异定位
 ├─ evaluate/
-│  ├─ evaluate.py                 # 各评价指标、混淆矩阵、分位置准确率
+│  ├─ main.py                     # 独立评测入口（载入检查点，不重训）
+│  ├─ model_eval.py               # 各评价指标、混淆矩阵、分位置准确率、CPU 计时
 │  └─ visualize.py                # 曲线、样本网格、错误样本可视化
 ├─ reports/
 │  ├─ run_all.py                  # 一键跑完全部启用的对照实验
+│  ├─ make_figs.py                # 由数值产物重画全部图片
+│  ├─ build_report_tables.py      # 由数值产物生成报告用 Markdown 表格
 │  ├─ logs/                       # 每实验逐 epoch 指标（入库，是结论的直接证据）
 │  ├─ figs/                       # 训练曲线、混淆矩阵、错误样本（不入库）
 │  ├─ tables/                     # 汇总 CSV / Markdown 表
@@ -142,26 +148,54 @@ python models/dataset.py build
 # 梯度检查（P3 验收：相对误差 < 1e-5）
 python train/grad_check.py
 
-# 100 张小样本过拟合自检（P2/P3 验收）
-python train/train.py overfit
+# 小样本过拟合自检（P2/P3 验收：loss < 1e-3 且字符/整牌 100%）
+python train/overfit_check.py
 
-# 单次基线训练
-python train/train.py --config configs/default.yaml
+# 单次基线训练（脚本名与运行短名；训练、日志落盘、最佳模型保存一体）
+python train/train.py --name baseline_s42 --seed 42
 
-# 评估（含 CPU 单张/批量推理时间）
-python evaluate/evaluate.py --run <run_id>
+# ★ 独立评测（载入检查点，不重新训练；含 CPU 单张/批量推理时间）
+#   注意入口是 evaluate/main.py —— 命名为 evaluate.py 会遮蔽 evaluate 包
+python evaluate/main.py --run baseline_s42
+
+# 出图（由数值产物重画曲线 / 混淆矩阵 / 错误样本）
+python reports/make_figs.py --runs baseline_s42
+```
+
+### 诊断脚本（负结果的可复核证据）
+
+```bash
+# 逐算子量化数据增强的破坏程度 -> reports/logs/augment_diag.json
+python train/diag_augment.py
+
+# 定位真实域与合成域的差异（标签一致性、字符位置、输入尺度）
+python train/diag_domain_gap.py
 ```
 
 ### 一键跑完对照实验
 
 ```bash
 python reports/run_all.py                       # 跑配置中 enabled 的实验
-python reports/run_all.py --experiments E1 E3 E4 E7
+python reports/run_all.py --only E1 E3 E4 E7
 python reports/run_all.py --seeds 42 43 44
-python reports/run_all.py --list
+python reports/run_all.py --skip-existing       # 断点续跑，复用已有产物
+python reports/run_all.py --only E4 --limit 2000 --prefix e4n_ \
+       --skip-variant batch_1                   # 统一小样本口径 + 显式跳过某变体
+python reports/run_all.py --run-timeout 1500    # 单次运行时间预算（秒）
 ```
 
 每个实验至少 **3 个随机种子**重复，报告**均值 ± 标准差**。
+`--run-timeout` 会在超预算时提前结束训练并写入 `budget_exhausted: true`，
+**不会把"没跑满"伪装成跑满的结果**。
+
+### 生成报告表格
+
+```bash
+python reports/build_report_tables.py --write --inject
+```
+
+报告里的表格由数值产物自动生成并注入 `reports/实验报告.md` 的
+`<!-- TABLE:XXX -->` 占位符，避免手工抄写数字出错。
 
 ---
 
@@ -196,13 +230,15 @@ python train/phase15_split.py
 
 # 2) 正确性验证
 python train/grad_check.py
-python train/train.py overfit
+python train/overfit_check.py
 
-# 3) 基线训练 + 对照实验
-python reports/run_all.py
+# 3) 基线训练 + 对照实验（必做集 E1/E3/E4/E7）
+python reports/run_all.py --baseline --only E1 E3 E4 E7 --skip-existing
 
-# 4) 汇总表与图
-python reports/run_all.py --summarize-only
+# 4) 独立评测 + 出图 + 报告表格
+python evaluate/main.py --run baseline_s42
+python reports/make_figs.py --runs baseline_s42
+python reports/build_report_tables.py --write --inject
 
 # 5) 报告见 reports/实验报告.md
 ```
@@ -219,6 +255,16 @@ python reports/run_all.py --summarize-only
 * **偏置项不参与 L2 惩罚**（§4.1）。
 * **必须同时报告字符准确率与整牌准确率**：字符准确率 95% 时整牌准确率上界仅约 73.5%。
 * **合成域与强扰动测试集在调参阶段不得参与任何选择决策**（§2.5 要求 3）。
+* **标准化统计量只在训练集上拟合**（mean=0.421204、std=0.221177、n=9000），
+  验证 / 测试 / 强扰动 / 合成域一律复用，不得各自重新拟合。
+* **`evaluate/main.py` 不能命名为 `evaluate/evaluate.py`**：直接运行会把它注册为
+  顶层模块 `evaluate`，遮蔽同名包，导致
+  `ModuleNotFoundError: No module named 'evaluate.model_eval'`。
+* **评测入口必须载入检查点**：`Params.load` 是 classmethod、返回 `(Params, extra)`；
+  写成 `params.load(ckpt)` 会丢弃返回值、静默使用随机权重（本项目踩过这个坑，
+  表现为独立评测 3.10% 而训练脚本 86.73%）。
+* **`configs/default.yaml` 的增强强度是针对本架构调过的**：MLP 无平移不变性，
+  几何增强（旋转/缩放/平移）会产生负效果，详见实验报告 §7.4。
 
 ---
 

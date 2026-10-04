@@ -117,6 +117,7 @@ class TrainingConfig:
     augment_level: str = "weak"
     seed: int = 42
     backend: str = "numpy"
+    time_budget_seconds: Optional[float] = None
 
     @classmethod
     def from_config(cls, cfg: Config, seed: Optional[int] = None,
@@ -158,6 +159,9 @@ class TrainingConfig:
             augment_level=str(cfg.augmentation.get("baseline_level", "weak")),
             seed=int(seed if seed is not None else cfg.train.get("seed", 42)),
             backend=str(backend if backend is not None else o.get("backend", "numpy")),
+            time_budget_seconds=(
+                None if cfg.train.get("time_budget_seconds", None) is None
+                else float(cfg.train.time_budget_seconds)),
         )
 
     def as_dict(self) -> Dict[str, Any]:
@@ -183,6 +187,8 @@ class TrainHistory:
         实际停止轮次。
     early_stopped : bool
         是否触发早停。
+    budget_exhausted : bool
+        是否因时间预算用尽而提前结束（轮次不足，结果需注明）。
     """
 
     epochs: List[Dict[str, Any]] = field(default_factory=list)
@@ -190,6 +196,7 @@ class TrainHistory:
     best_score: float = float("inf")
     stopped_epoch: int = 0
     early_stopped: bool = False
+    budget_exhausted: bool = False
 
     def append(self, row: Dict[str, Any]) -> None:
         """追加一行。"""
@@ -203,6 +210,7 @@ class TrainHistory:
             "best_score": self.best_score,
             "stopped_epoch": self.stopped_epoch,
             "early_stopped": self.early_stopped,
+            "budget_exhausted": self.budget_exhausted,
             "n_epochs": len(self.epochs),
         }
 
@@ -559,6 +567,19 @@ class Trainer:
         for epoch in range(1, tcfg.epochs + 1):
             t0 = time.perf_counter()
             self.history.stopped_epoch = epoch
+
+            # 时间预算：E4 的 batch_size=1 每轮要上百秒，80 轮需要数小时。
+            # 达到预算就停止本轮之后的所有训练，并把已跑的轮次如实记录，
+            # 绝不伪造"跑满 80 轮"的结果。
+            if (tcfg.time_budget_seconds is not None
+                    and tcfg.time_budget_seconds > 0
+                    and (time.perf_counter() - t_start) >= tcfg.time_budget_seconds):
+                self.history.budget_exhausted = True
+                print(f"    [时间预算] 已用 {time.perf_counter() - t_start:.1f}s "
+                      f"超过预算 {tcfg.time_budget_seconds:.0f}s，"
+                      f"在第 {epoch} 轮前停止（已完成 {len(self.history.epochs)} 轮）")
+                break
+
             tr = self._train_epoch(epoch)
 
             row: Dict[str, Any] = {"epoch": epoch, **tr}
@@ -828,6 +849,8 @@ def run_training(
         "train_seconds": round(train_seconds, 2),
         "epochs_run": len(history.epochs),
         "early_stopped": history.early_stopped,
+        "budget_exhausted": history.budget_exhausted,
+        "planned_epochs": int(tcfg.epochs),
         "best_epoch": history.best_epoch,
         "history": history.as_dict(),
         "train": res_train.metrics.as_dict(),

@@ -236,6 +236,15 @@ train:
   clip_grad_norm: null                   # null = 不裁剪
   eval_every: 1                          # 每多少轮做一次验证
   log_every: 1
+  # 单次运行的时间预算（秒）。null = 不限制。
+  #
+  # ★ 为什么需要：E4 要比较 batch_size=1（纯 SGD）与全批量。实测 bs=1 时
+  #   每轮约 103 秒（9000 样本逐样本更新），跑满 80 轮需要约 2.3 小时；
+  #   3 个种子就是 7 小时，超出可承受范围。设预算后，超时的运行会提前结束，
+  #   并在 *_run.json 里写入 budget_exhausted=true 与实际轮次，
+  #   汇总时明确标注"轮次不足"，绝不把它当成跑满 80 轮的结果。
+  #   用 --run-timeout 可覆盖此值。
+  time_budget_seconds: null
   # 小样本过拟合自检（P2/P3 验收，§5.4）
   #
   # ★ 实测结论（本机 sigmoid + 6 路 Softmax，100 样本，已逐一试过 lr∈{0.3..4}、
@@ -270,6 +279,7 @@ eval:
   report_cpu_time: true                   # ★ 必须报告 CPU 单张/批量推理时间
   cpu_time_warmup: 5
   cpu_time_repeat: 20
+  cpu_timing_samples: 50                  # 单张计时用张数（计时=张数×repeat 次前向）
   cpu_time_batch_sizes: [1, 32, 512]
 
 # -----------------------------------------------------------------------------

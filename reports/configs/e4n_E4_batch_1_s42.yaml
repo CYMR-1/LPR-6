@@ -1,0 +1,449 @@
+project:
+  name: ProjectX
+  version: 1.0.0
+  task: 共享 MLP 与位置分类头的车牌后六位字符识别
+  preprocess_version: prep-v1.0.0
+base_seeds:
+- 42
+- 43
+- 44
+paths:
+  ccpd_root: data/ccpd
+  synth_root: data/synth_test
+  synth_preview: data/synth_test_preview
+  processed_dir: data/processed
+  manifest: data/manifest.csv
+  ccpd_readme: data/CCPD_README.md
+  models_dir: reports/checkpoints
+  logs_dir: reports/logs
+  figs_dir: reports/figs
+  tables_dir: reports/tables
+charset:
+  digits: 0123456789
+  letters: ABCDEFGHJKLMNPQRSTUVWXYZ
+  num_classes: 34
+  seq_len: 6
+  positions:
+  - 34
+  - 34
+  - 34
+  - 34
+  - 34
+  - 34
+  position_letter_max_index: 23
+ccpd:
+  subsets:
+    base: ccpd_base
+    blur: ccpd_blur
+    challenge: ccpd_challenge
+    rotate: ccpd_rotate
+    tilt: ccpd_tilt
+    weather: ccpd_weather
+    fn: ccpd_fn
+    green: ccpd_green
+  train_subset: base
+  hard_subset_names:
+  - blur
+  - challenge
+  - rotate
+  - tilt
+  - weather
+  - fn
+  rectify_size:
+  - 168
+  - 52
+  input_size:
+  - 128
+  - 32
+  keep_right_fraction: 0.8571428571428571
+  grayscale: true
+  min_quad_area_px: 200.0
+  max_bbox_over_area: 1.0
+  allow_out_of_bounds_px: 2.0
+split:
+  val_size: 2000
+  test_size: 2000
+  train_size: 9000
+  synth_test_size: 2000
+  hard_test_size: 2000
+  split_seed: 42
+  allow_multi_frame_same_split: true
+synth:
+  backend: pil_renderer
+  seed: 2024
+  width: 128
+  height: 32
+  fonts:
+  - C:/Windows/Fonts/simhei.ttf
+  - C:/Windows/Fonts/msyh.ttc
+  - C:/Windows/Fonts/simsun.ttc
+  - C:/Windows/Fonts/Deng.ttf
+  province_chars:
+  - 皖
+  - 沪
+  - 津
+  - 渝
+  - 冀
+  - 晋
+  - 蒙
+  - 辽
+  - 吉
+  - 黑
+  - 苏
+  - 浙
+  - 京
+  - 闽
+  - 赣
+  - 鲁
+  - 豫
+  - 鄂
+  - 湘
+  - 粤
+  - 桂
+  - 琼
+  - 川
+  - 贵
+  - 云
+  - 藏
+  - 陕
+  - 甘
+  - 青
+  - 宁
+  - 新
+  - 警
+  - 学
+  plate_styles:
+  - name: blue_on_white
+    bg:
+    - 30
+    - 60
+    - 160
+    fg:
+    - 240
+    - 245
+    - 250
+    noise: 6.0
+  - name: black_on_yellow
+    bg:
+    - 215
+    - 180
+    - 40
+    fg:
+    - 20
+    - 20
+    - 20
+    noise: 6.0
+  - name: black_on_white
+    bg:
+    - 235
+    - 235
+    - 235
+    fg:
+    - 25
+    - 25
+    - 25
+    noise: 6.0
+  - name: black_on_green
+    bg:
+    - 40
+    - 150
+    - 80
+    fg:
+    - 20
+    - 20
+    - 20
+    noise: 6.0
+  jitter: 1.0
+  rotation_deg: 0.0
+  blur_sigma: 0.0
+  jpeg_quality: null
+augmentation:
+  baseline_level: weak
+  levels:
+    none:
+      enabled: false
+      rotation_deg: 0.0
+      translate_px: 0
+      scale_range:
+      - 1.0
+      - 1.0
+      gaussian_blur_prob: 0.0
+      motion_blur_prob: 0.0
+      gaussian_noise_prob: 0.0
+      gaussian_noise_sigma: 0.0
+      salt_pepper_prob: 0.0
+      salt_pepper_ratio: 0.0
+      brightness_range:
+      - 1.0
+      - 1.0
+      contrast_range:
+      - 1.0
+      - 1.0
+      jpeg_prob: 0.0
+      jpeg_quality_range:
+      - 95
+      - 100
+    weak:
+      enabled: true
+      rotation_deg: 5.0
+      translate_px: 2
+      scale_range:
+      - 0.9
+      - 1.1
+      gaussian_blur_prob: 0.25
+      motion_blur_prob: 0.15
+      gaussian_noise_prob: 0.3
+      gaussian_noise_sigma: 0.02
+      salt_pepper_prob: 0.1
+      salt_pepper_ratio: 0.003
+      brightness_range:
+      - 0.85
+      - 1.15
+      contrast_range:
+      - 0.85
+      - 1.15
+      jpeg_prob: 0.2
+      jpeg_quality_range:
+      - 60
+      - 95
+    strong:
+      enabled: true
+      rotation_deg: 12.0
+      translate_px: 4
+      scale_range:
+      - 0.85
+      - 1.15
+      gaussian_blur_prob: 0.5
+      motion_blur_prob: 0.35
+      gaussian_noise_prob: 0.55
+      gaussian_noise_sigma: 0.05
+      salt_pepper_prob: 0.25
+      salt_pepper_ratio: 0.01
+      brightness_range:
+      - 0.6
+      - 1.4
+      contrast_range:
+      - 0.6
+      - 1.4
+      jpeg_prob: 0.5
+      jpeg_quality_range:
+      - 30
+      - 85
+model:
+  arch: shared
+  input_dim: 4096
+  hidden_dim: 256
+  activation: sigmoid
+  init: xavier
+  head_dims: null
+loss:
+  type: cross_entropy
+  l2_lambda: 0.0001
+  penalize_bias: false
+  softmax_eps: 1.0e-12
+optim:
+  optimizer: sgd_momentum
+  learning_rate: 0.05
+  momentum: 0.9
+  batch_size: 1
+  shuffle: true
+  backend: cupy
+  lr_decay: 0.0
+  weight_decay_separate: true
+train:
+  epochs: 80
+  early_stop_patience: 8
+  early_stop_min_delta: 1.0e-05
+  monitor: val_loss
+  save_best_only: true
+  clip_grad_norm: null
+  eval_every: 1
+  log_every: 1
+  time_budget_seconds: 1500.0
+  overfit_check:
+    n_samples: 100
+    epochs: 20000
+    learning_rate: 0.5
+    momentum: 0.0
+    l2_lambda: 0.0
+    target_loss: 0.001
+    target_char_acc: 1.0
+eval:
+  batch_size: 512
+  top_k: 3
+  confusion_per_position: true
+  error_table_top_n: 200
+  high_confidence_threshold: 0.9
+  report_cpu_time: true
+  cpu_time_warmup: 5
+  cpu_time_repeat: 20
+  cpu_timing_samples: 50
+  cpu_time_batch_sizes:
+  - 1
+  - 32
+  - 512
+grad_check:
+  n_samples: 8
+  relative_error_tol: 1.0e-05
+  absolute_error_tol: 1.0e-08
+  n_checks_per_param: 3
+  epsilon: 1.0e-06
+  seed: 42
+experiments:
+  enabled:
+  - E1
+  - E3
+  - E4
+  - E7
+  all_defined:
+  - E1
+  - E2
+  - E3
+  - E4
+  - E5
+  - E6
+  - E7
+  - E8
+  - E9
+  E1:
+    question: 共享隐层是否优于六个独立 MLP
+    variants:
+      shared:
+        model.arch: shared
+      independent:
+        model.arch: independent
+    seeds:
+    - 42
+    - 43
+    - 44
+  E2:
+    question: 激活函数对训练速度与饱和的影响
+    variants:
+      sigmoid:
+        model.activation: sigmoid
+      relu:
+        model.activation: relu
+    seeds:
+    - 42
+    - 43
+    - 44
+  E3:
+    question: 损失函数对前 20 轮下降速度与最终准确率的影响
+    variants:
+      cross_entropy:
+        loss.type: cross_entropy
+      mse:
+        loss.type: mse
+    seeds:
+    - 42
+    - 43
+    - 44
+  E4:
+    question: 批量大小 / SGD / 小批量对稳定性与泛化的影响
+    variants:
+      batch_1:
+        optim.batch_size: 1
+      batch_32:
+        optim.batch_size: 32
+      batch_64:
+        optim.batch_size: 64
+      batch_128:
+        optim.batch_size: 128
+      batch_full:
+        optim.batch_size: -1
+    seeds:
+    - 42
+    - 43
+    - 44
+  E5:
+    question: 动量对震荡幅度与收敛速度的影响
+    variants:
+      momentum_0:
+        optim.momentum: 0.0
+        optim.learning_rate: 0.01
+      momentum_09:
+        optim.momentum: 0.9
+    seeds:
+    - 42
+    - 43
+    - 44
+  E6:
+    question: L2 正则对训练/验证差距与合成域准确率的影响
+    variants:
+      l2_0:
+        loss.l2_lambda: 0.0
+      l2_1e-5:
+        loss.l2_lambda: 1.0e-05
+      l2_1e-4:
+        loss.l2_lambda: 0.0001
+      l2_1e-3:
+        loss.l2_lambda: 0.001
+    seeds:
+    - 42
+    - 43
+    - 44
+  E7:
+    question: 数据增强对强扰动与合成域测试集准确率的影响
+    variants:
+      aug_none:
+        augmentation.baseline_level: none
+      aug_weak:
+        augmentation.baseline_level: weak
+      aug_strong:
+        augmentation.baseline_level: strong
+    seeds:
+    - 42
+    - 43
+    - 44
+  E8:
+    question: 32×128 与 24×96 的精度/推理时间权衡
+    variants:
+      size_32x128:
+        ccpd.input_size:
+        - 128
+        - 32
+        model.input_dim: 4096
+      size_24x96:
+        ccpd.input_size:
+        - 96
+        - 24
+        model.input_dim: 2304
+    seeds:
+    - 42
+    - 43
+    - 44
+  E9:
+    question: 全 34 类 vs 首位 24 类
+    variants:
+      heads_34x6:
+        charset.positions:
+        - 34
+        - 34
+        - 34
+        - 34
+        - 34
+        - 34
+      heads_24x34x5:
+        charset.positions:
+        - 24
+        - 34
+        - 34
+        - 34
+        - 34
+        - 34
+    seeds:
+    - 42
+    - 43
+    - 44
+viz:
+  dpi: 150
+  fig_format: png
+  curve_metrics:
+  - train_loss
+  - val_loss
+  - val_char_acc
+  - val_seq_acc
+  confusion_normalize: true
+  grid_samples: 20
+  grid_cols: 4
+  chinese_font: C:/Windows/Fonts/simhei.ttf

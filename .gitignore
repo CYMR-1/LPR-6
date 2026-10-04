@@ -41,6 +41,9 @@ data/manifest_hard.csv
 reports/checkpoints/
 reports/figs/
 
+# 后台任务的运行日志（过程性输出，不是结论证据）
+reports/logs/_job*.log
+
 # 参考仓库（临时核对用）
 _ref/
 

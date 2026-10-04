@@ -1,0 +1,19 @@
+{
+  "commit": "eee708e",
+  "dirty": true,
+  "experiments": [
+    "E4"
+  ],
+  "seeds": null,
+  "limit": 2000,
+  "epochs": null,
+  "prefix": "e4n_",
+  "smoke": false,
+  "n_runs_ok": 12,
+  "n_runs_failed": 0,
+  "failures": [],
+  "tables": {
+    "all_runs": "C:\\Users\\cymr1\\Desktop\\深度学习导论\\projectX\\reports\\tables\\all_experiments_runs.csv",
+    "all_summary": "C:\\Users\\cymr1\\Desktop\\深度学习导论\\projectX\\reports\\tables\\all_experiments_summary.csv"
+  }
+}
