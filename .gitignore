@@ -44,6 +44,12 @@ reports/figs/
 # 后台任务的运行日志（过程性输出，不是结论证据）
 reports/logs/_job*.log
 
+# 一次性重测脚本的运行日志（过程性输出）
+reports/logs/_refresh_synth.log
+
+# CuPy JIT 头文件缓存（运行时生成，正常落在 %TEMP%；若 TMPDIR 异常会落到工作区）
+projectx_cupy_inc/
+
 # 外部生成器仓库（合成域测试集来源；由 clone 重建，固定 commit 见 README §3.1）
 data/external/
 

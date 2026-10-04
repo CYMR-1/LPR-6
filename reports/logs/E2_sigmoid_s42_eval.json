@@ -1,7 +1,7 @@
 {
   "run_name": "E2_sigmoid_s42",
   "config_name": "ProjectX",
-  "commit": "e4c15e1",
+  "commit": "9131d19",
   "git_dirty": true,
   "backend": "cupy",
   "device_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
@@ -20,8 +20,8 @@
     "num_parameters": 1101260
   },
   "cpu_inference": {
-    "cpu_inference_ms_per_image": 0.2648,
-    "cpu_inference_images_per_sec": 3776.93,
+    "cpu_inference_ms_per_image": 0.2447,
+    "cpu_inference_images_per_sec": 4086.07,
     "n_samples": 50,
     "repeats": 20,
     "batch_size": 1,
@@ -48,7 +48,7 @@
       "char_acc_mean_pos": 0.887556,
       "char_acc_min_pos": 0.796778,
       "char_acc_max_pos": 0.933,
-      "eval_seconds": 0.46,
+      "eval_seconds": 0.35,
       "n_evaluated": 9000,
       "backend": "cupy",
       "device_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
@@ -504,7 +504,7 @@
       "char_acc_mean_pos": 0.867333,
       "char_acc_min_pos": 0.7615,
       "char_acc_max_pos": 0.9305,
-      "eval_seconds": 0.07,
+      "eval_seconds": 0.08,
       "n_evaluated": 2000,
       "backend": "cupy",
       "device_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
@@ -732,7 +732,7 @@
       "char_acc_mean_pos": 0.628,
       "char_acc_min_pos": 0.489,
       "char_acc_max_pos": 0.8395,
-      "eval_seconds": 0.07,
+      "eval_seconds": 0.08,
       "n_evaluated": 2000,
       "backend": "cupy",
       "device_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
@@ -947,230 +947,230 @@
     },
     "synth_test": {
       "n_samples": 2000,
-      "char_acc": 0.056167,
-      "plate_acc": 0.0,
-      "loss": 62.549203,
-      "data_loss": 61.760747,
-      "per_position_0": 0.0435,
-      "per_position_1": 0.0265,
-      "per_position_2": 0.077,
-      "per_position_3": 0.0775,
-      "per_position_4": 0.072,
-      "per_position_5": 0.0405,
-      "char_acc_mean_pos": 0.056167,
-      "char_acc_min_pos": 0.0265,
-      "char_acc_max_pos": 0.0775,
-      "eval_seconds": 0.07,
+      "char_acc": 0.41625,
+      "plate_acc": 0.002,
+      "loss": 16.222382,
+      "data_loss": 15.433926,
+      "per_position_0": 0.055,
+      "per_position_1": 0.445,
+      "per_position_2": 0.579,
+      "per_position_3": 0.6755,
+      "per_position_4": 0.357,
+      "per_position_5": 0.386,
+      "char_acc_mean_pos": 0.41625,
+      "char_acc_min_pos": 0.055,
+      "char_acc_max_pos": 0.6755,
+      "eval_seconds": 0.08,
       "n_evaluated": 2000,
       "backend": "cupy",
       "device_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
       "top_confusions": [
         [
           [
-            "J",
+            "F",
             "A",
-            90
+            98
           ],
           [
-            "C",
+            "W",
             "A",
-            87
+            89
           ],
           [
-            "Z",
+            "K",
+            "A",
+            88
+          ],
+          [
+            "E",
             "A",
             82
           ],
           [
-            "Y",
+            "X",
             "A",
-            80
-          ],
-          [
-            "V",
-            "A",
-            80
+            81
           ]
         ],
         [
           [
+            "Z",
             "2",
-            "H",
-            52
+            43
           ],
           [
-            "8",
-            "J",
-            46
+            "Y",
+            "7",
+            31
           ],
-          [
-            "9",
-            "J",
-            32
-          ],
-          [
-            "3",
-            "U",
-            29
-          ],
-          [
-            "3",
-            "H",
-            28
-          ]
-        ],
-        [
           [
             "6",
-            "7",
-            39
-          ],
-          [
-            "1",
-            "0",
-            38
-          ],
-          [
-            "2",
-            "5",
-            34
-          ],
-          [
-            "8",
-            "7",
-            33
+            "A",
+            27
           ],
           [
             "9",
             "3",
-            29
+            22
+          ],
+          [
+            "S",
+            "3",
+            22
           ]
         ],
         [
           [
-            "1",
+            "Z",
+            "2",
+            51
+          ],
+          [
             "D",
+            "0",
             44
           ],
           [
-            "6",
-            "D",
-            41
-          ],
-          [
-            "2",
-            "5",
-            39
-          ],
-          [
+            "Y",
             "7",
-            "5",
-            33
+            42
           ],
           [
-            "4",
-            "D",
+            "S",
+            "5",
+            36
+          ],
+          [
+            "U",
+            "0",
+            36
+          ]
+        ],
+        [
+          [
+            "S",
+            "5",
+            57
+          ],
+          [
+            "Z",
+            "2",
+            47
+          ],
+          [
+            "Q",
+            "0",
+            43
+          ],
+          [
+            "U",
+            "0",
+            34
+          ],
+          [
+            "G",
+            "0",
             30
           ]
         ],
         [
           [
-            "6",
-            "0",
-            60
-          ],
-          [
-            "8",
-            "0",
-            47
-          ],
-          [
-            "5",
-            "0",
-            44
-          ],
-          [
-            "1",
-            "0",
-            44
-          ],
-          [
-            "5",
+            "Z",
             "2",
-            40
+            72
+          ],
+          [
+            "D",
+            "0",
+            63
+          ],
+          [
+            "Q",
+            "0",
+            59
+          ],
+          [
+            "S",
+            "5",
+            58
+          ],
+          [
+            "U",
+            "0",
+            55
           ]
         ],
         [
           [
-            "7",
-            "6",
+            "Q",
+            "0",
+            71
+          ],
+          [
+            "R",
+            "8",
+            54
+          ],
+          [
+            "D",
+            "0",
             52
           ],
           [
-            "6",
-            "2",
-            46
-          ],
-          [
-            "8",
-            "L",
-            45
-          ],
-          [
+            "U",
             "0",
-            "2",
-            36
+            51
           ],
           [
+            "V",
             "9",
-            "L",
-            36
+            46
           ]
         ]
       ],
       "sample_truth": [
-        "SH30DX",
-        "G0J172",
-        "A3QU97",
-        "XB334W",
-        "U12874",
-        "HV5EXU",
-        "JB2M1S",
-        "ZD33GR",
-        "L719Q5",
-        "Y80Q71",
-        "TG004B",
-        "HUHR53",
-        "H11D44",
-        "W978G4",
-        "X7T738",
-        "A75JAJ",
-        "J0284V",
-        "LDE0HE",
-        "SK91S7",
-        "Z12631"
+        "XJCQGY",
+        "RLX4DT",
+        "KRQKDQ",
+        "T7LEFT",
+        "TLLTA8",
+        "WTGUXR",
+        "Q8D5WB",
+        "RBYK07",
+        "UCTBUK",
+        "GAJPCB",
+        "N2DTZV",
+        "H6R48B",
+        "PKA277",
+        "H7KY8D",
+        "RAE0W7",
+        "QXEFME",
+        "NKC4G2",
+        "WUH4T7",
+        "KQLLZF",
+        "R8RYC8"
       ],
       "sample_pred": [
-        "AFS00H",
-        "N11177",
-        "AK1097",
-        "AJF602",
-        "AHFD0L",
-        "E320C2",
-        "A19J8L",
-        "A10877",
-        "AU3F22",
-        "AA207J",
-        "ADF939",
-        "A12J02",
-        "EJ060L",
-        "CMHD0L",
-        "CU088L",
-        "AU7856",
-        "A39102",
-        "AJJF22",
-        "A3LD26",
-        "AN5D52"
+        "AJC001",
+        "AL3407",
+        "A80K00",
+        "A0E881",
+        "AEL748",
+        "AT0U38",
+        "A30585",
+        "A83K07",
+        "BT700W",
+        "AAJP08",
+        "A20771",
+        "A6R480",
+        "AX3277",
+        "AJ8Y80",
+        "K4E087",
+        "CX5F82",
+        "AKC402",
+        "ACH817",
+        "ASLL2F",
+        "ASRY08"
       ]
     }
   }

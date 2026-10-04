@@ -230,3 +230,49 @@ Get-Item reports\logs\E2_relu_s42_run.json, reports\logs\E5_momentum_0_s44_run.j
 
 **审计边界**：未修改 `reports/实验报告.md` 或任何被测产物；本文件为唯一交付物（覆盖旧版）。
 审计脚本在 `%TEMP%\px_audit.py`（工作区外）。若报告在 16:08:56 之后再次变动，本审计需以新快照重核。
+
+---
+
+## 附录 A：合成域后端切换后的复核（v3）
+
+**背景**：报告口径的合成域测试集已从内置 PIL 渲染器（`pil_renderer`）切换为
+外部生成器 `Nenger/chinese_licence_plate_generator`@`43bac43` 的牌面级输出
+（`generator_repo`）。切换**只替换划分文件里的 `synth_images/synth_labels/
+synth_texts`**，`train/val/test/hard` 索引与标准化统计量逐字节不变
+（`train/swap_synth_to_generator.py` 内置断言）；合成域从不参与训练或调参，
+故按"只重测、不重训"处理：`reports/refresh_synth_eval.py` 用各运行的**现有
+最佳检查点**重测并刷新 `*_run.json::synth_test` + 全部 `*_eval.json`。
+
+**已完成的重测覆盖**：75 份 `*_run.json` 的 `synth_test` 字段全部刷新；
+48 份 `*_eval.json` 全量重评（新增字段 `synth_backend="generator_repo@43bac43"`）。
+
+| 复核内容 | 数据源 | 结果 |
+|---|---|---|
+| 非合成域数值是否被重测改动 | 5 份 `*_eval.json` vs `git show HEAD:<同名>` | **逐位一致**（<1e-12）：train/val/test/hard 的 char_acc 全部相同 → 重测链路无副作用 |
+| 合成域数值变化 | 同上 | 变化只出现在 `synth_test`（如 `baseline_s42` 5.62% → 41.62%） |
+| 两分辨率合成集是否同标签 | `splits.npz` / `splits_24x96.npz` | 标签序列完全相同（脚本内断言） |
+| 生成器确定性（同种子重跑） | `generate_dataset_from_repo` 2000 张 vs `splits.npz::synth_*` | 文本/标签/图像**逐位一致**，拒绝数 912 相同 → 可复现 |
+| 标签合法性 | `splits.npz::synth_labels` + `check_label_legal` | 2000/2000 合法；共拒绝 I/O 标签 912 张 |
+| 标签-图像一致性 | `domain_gap.json::labels` | 2000/2000 一致 |
+| 六格质心对齐 | `domain_gap.json` | 最大偏差 1.94 px（pos2）；合成域 σ≈1.1–1.3 px |
+| 标准化敏感性 | `domain_gap.json` | global_train 41.62% / global_synth 42.85% / per_image 43.38% |
+| 平凡基线 | `splits.npz::synth_labels` + train 众数 | 逐位众数 4.05%；train 众数迁移 3.12%；随机 2.94% |
+| 域差（E7_aug_none_s42） | run.json / eval.json | 98.28/91.35（test）、72.55/32.05（hard）、43.67/0.80（synth） |
+| 工程一致性 | `exp_E*_summary.csv` / `report_tables.md` / 报告注入表 | 三者同源（`reports/rebuild_summary_tables.py` + `build_report_tables.py`）复核一致 |
+
+**本附录取代的旧条目**（上一版审计中涉及合成域的数字，均以本文档为准）：
+
+* §8.1 的"合成域更稳定 / σ≈0.3–0.7 px"、标准化敏感性 5.62/5.45/5.79%；
+* §8.2 的可学性对照表（本轮**未重跑**，按"只重测不重训"约束，报告中已改为
+  仅保留不依赖训练的自洽性证据）；
+* §8.3 的两域统计（原始像素均值 136.6 → **82.1**，标准化后 +0.518σ → **−0.449σ**，
+  std 1.176 → 1.034）；
+* §8.5 差值 −92.8/−91.4 pt → **−54.6/−90.6 pt**（s42 口径）；
+* §7.1/§7.7 中"合成域两架构都 5–6%、L2 无效"等基于旧合成集的结论；
+* 审计 `#3`（101.3 vs 108.2 的像素均值口径不一致）在重写后已统一为
+  `domain_gap.json` 的实测值（真实 108.2 / 合成 82.1）。
+
+**未做的检查**（如实声明）：合成图的人工视觉核对仍待人工完成
+（`reports/figs/synth_check_grid.png`）；本模型无法读图，故只做了数值几何核对
+（墨迹质心/簇数）与标签核对。此外重测发生在工作区含产物变动的状态下，
+刷新后的 `*_eval.json::git_dirty` 记为 `true`（与历史产物同性质，见报告 §4 说明）。

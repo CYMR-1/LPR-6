@@ -782,22 +782,23 @@
   },
   "synth_test": {
     "n_samples": 2000,
-    "char_acc": 0.064667,
-    "plate_acc": 0.0005,
-    "loss": 67.558357,
-    "data_loss": 66.904343,
-    "per_position_0": 0.048,
-    "per_position_1": 0.029,
-    "per_position_2": 0.0945,
-    "per_position_3": 0.1015,
-    "per_position_4": 0.076,
-    "per_position_5": 0.039,
-    "char_acc_mean_pos": 0.064667,
-    "char_acc_min_pos": 0.029,
-    "char_acc_max_pos": 0.1015
+    "char_acc": 0.662833,
+    "plate_acc": 0.041,
+    "loss": 9.377639,
+    "data_loss": 8.723628,
+    "per_position_0": 0.1695,
+    "per_position_1": 0.8085,
+    "per_position_2": 0.8725,
+    "per_position_3": 0.909,
+    "per_position_4": 0.685,
+    "per_position_5": 0.5325,
+    "char_acc_mean_pos": 0.662833,
+    "char_acc_min_pos": 0.1695,
+    "char_acc_max_pos": 0.909
   },
   "gpu_memory": {
     "used_mb": 1117.5,
     "total_mb": 8187.5
-  }
+  },
+  "synth_backend": "generator_repo@43bac43"
 }

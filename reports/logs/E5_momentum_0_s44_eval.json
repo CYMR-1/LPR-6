@@ -1,7 +1,7 @@
 {
   "run_name": "E5_momentum_0_s44",
   "config_name": "ProjectX",
-  "commit": "e4c15e1",
+  "commit": "9131d19",
   "git_dirty": true,
   "backend": "cupy",
   "device_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
@@ -20,8 +20,8 @@
     "num_parameters": 1101260
   },
   "cpu_inference": {
-    "cpu_inference_ms_per_image": 0.2685,
-    "cpu_inference_images_per_sec": 3724.88,
+    "cpu_inference_ms_per_image": 0.2478,
+    "cpu_inference_images_per_sec": 4036.33,
     "n_samples": 50,
     "repeats": 20,
     "batch_size": 1,
@@ -48,7 +48,7 @@
       "char_acc_mean_pos": 0.898815,
       "char_acc_min_pos": 0.782778,
       "char_acc_max_pos": 0.938667,
-      "eval_seconds": 0.46,
+      "eval_seconds": 0.42,
       "n_evaluated": 9000,
       "backend": "cupy",
       "device_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
@@ -276,7 +276,7 @@
       "char_acc_mean_pos": 0.884083,
       "char_acc_min_pos": 0.7495,
       "char_acc_max_pos": 0.919,
-      "eval_seconds": 0.09,
+      "eval_seconds": 0.07,
       "n_evaluated": 2000,
       "backend": "cupy",
       "device_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
@@ -504,7 +504,7 @@
       "char_acc_mean_pos": 0.891667,
       "char_acc_min_pos": 0.7815,
       "char_acc_max_pos": 0.921,
-      "eval_seconds": 0.08,
+      "eval_seconds": 0.07,
       "n_evaluated": 2000,
       "backend": "cupy",
       "device_name": "NVIDIA GeForce RTX 4060 Laptop GPU",
@@ -947,19 +947,19 @@
     },
     "synth_test": {
       "n_samples": 2000,
-      "char_acc": 0.061,
-      "plate_acc": 0.0,
-      "loss": 36.461788,
-      "data_loss": 36.373307,
-      "per_position_0": 0.0375,
-      "per_position_1": 0.0315,
-      "per_position_2": 0.09,
-      "per_position_3": 0.088,
-      "per_position_4": 0.0785,
-      "per_position_5": 0.0405,
-      "char_acc_mean_pos": 0.061,
-      "char_acc_min_pos": 0.0315,
-      "char_acc_max_pos": 0.09,
+      "char_acc": 0.402083,
+      "plate_acc": 0.002,
+      "loss": 15.994707,
+      "data_loss": 15.906223,
+      "per_position_0": 0.0435,
+      "per_position_1": 0.6145,
+      "per_position_2": 0.563,
+      "per_position_3": 0.6235,
+      "per_position_4": 0.2985,
+      "per_position_5": 0.2695,
+      "char_acc_mean_pos": 0.402083,
+      "char_acc_min_pos": 0.0435,
+      "char_acc_max_pos": 0.6235,
       "eval_seconds": 0.07,
       "n_evaluated": 2000,
       "backend": "cupy",
@@ -967,210 +967,210 @@
       "top_confusions": [
         [
           [
-            "C",
-            "A",
-            94
-          ],
-          [
             "F",
             "A",
-            90
+            98
           ],
           [
-            "J",
+            "T",
             "A",
-            90
+            92
           ],
           [
-            "G",
+            "N",
             "A",
-            88
+            91
+          ],
+          [
+            "W",
+            "A",
+            91
+          ],
+          [
+            "Y",
+            "A",
+            89
+          ]
+        ],
+        [
+          [
+            "Y",
+            "7",
+            43
+          ],
+          [
+            "Z",
+            "2",
+            43
+          ],
+          [
+            "K",
+            "W",
+            30
+          ],
+          [
+            "T",
+            "7",
+            26
+          ],
+          [
+            "D",
+            "0",
+            26
+          ]
+        ],
+        [
+          [
+            "Z",
+            "2",
+            55
           ],
           [
             "S",
-            "A",
-            88
-          ]
-        ],
-        [
-          [
-            "2",
-            "9",
-            46
-          ],
-          [
-            "6",
-            "3",
-            46
-          ],
-          [
-            "8",
-            "J",
-            46
-          ],
-          [
-            "3",
-            "0",
-            46
-          ],
-          [
-            "1",
-            "3",
-            35
-          ]
-        ],
-        [
-          [
-            "1",
-            "0",
-            78
-          ],
-          [
-            "3",
-            "0",
-            65
-          ],
-          [
             "5",
-            "0",
-            64
+            54
           ],
           [
-            "4",
+            "D",
             "0",
-            63
+            51
           ],
           [
+            "B",
             "8",
+            45
+          ],
+          [
+            "Y",
+            "7",
+            44
+          ]
+        ],
+        [
+          [
+            "S",
+            "5",
+            71
+          ],
+          [
+            "B",
+            "8",
+            51
+          ],
+          [
+            "Z",
+            "2",
+            47
+          ],
+          [
+            "U",
+            "0",
+            45
+          ],
+          [
+            "Q",
             "0",
             45
           ]
         ],
         [
           [
-            "1",
-            "0",
-            68
-          ],
-          [
-            "6",
+            "Z",
             "2",
-            50
+            77
           ],
           [
-            "4",
-            "5",
-            48
-          ],
-          [
-            "0",
-            "5",
-            46
-          ],
-          [
-            "2",
-            "5",
-            46
-          ]
-        ],
-        [
-          [
-            "6",
-            "0",
-            84
-          ],
-          [
-            "5",
-            "0",
-            71
-          ],
-          [
-            "7",
-            "6",
-            64
-          ],
-          [
-            "8",
+            "D",
             "0",
             63
           ],
           [
-            "9",
+            "B",
+            "8",
+            63
+          ],
+          [
+            "S",
+            "5",
+            60
+          ],
+          [
+            "U",
             "0",
-            61
+            59
           ]
         ],
         [
           [
-            "7",
-            "6",
-            55
+            "D",
+            "0",
+            54
           ],
           [
-            "1",
+            "R",
             "8",
-            47
+            51
           ],
           [
+            "V",
             "9",
-            "6",
-            46
+            50
           ],
           [
-            "6",
-            "2",
-            44
+            "Q",
+            "0",
+            45
           ],
           [
-            "2",
+            "K",
             "8",
-            43
+            45
           ]
         ]
       ],
       "sample_truth": [
-        "SH30DX",
-        "G0J172",
-        "A3QU97",
-        "XB334W",
-        "U12874",
-        "HV5EXU",
-        "JB2M1S",
-        "ZD33GR",
-        "L719Q5",
-        "Y80Q71",
-        "TG004B",
-        "HUHR53",
-        "H11D44",
-        "W978G4",
-        "X7T738",
-        "A75JAJ",
-        "J0284V",
-        "LDE0HE",
-        "SK91S7",
-        "Z12631"
+        "XJCQGY",
+        "RLX4DT",
+        "KRQKDQ",
+        "T7LEFT",
+        "TLLTA8",
+        "WTGUXR",
+        "Q8D5WB",
+        "RBYK07",
+        "UCTBUK",
+        "GAJPCB",
+        "N2DTZV",
+        "H6R48B",
+        "PKA277",
+        "H7KY8D",
+        "RAE0W7",
+        "QXEFME",
+        "NKC4G2",
+        "WUH4T7",
+        "KQLLZF",
+        "R8RYC8"
       ],
       "sample_pred": [
-        "AF1020",
-        "A11173",
-        "AK1097",
-        "AJU801",
-        "A35068",
-        "A30002",
-        "AJH386",
-        "A10515",
-        "AJ0C22",
-        "A66017",
-        "AG1818",
-        "AY1086",
-        "AJ0605",
-        "AD0006",
-        "A00865",
-        "EQU059",
-        "AJ0102",
-        "AJ7531",
-        "A3C006",
-        "A35268"
+        "AJE057",
+        "AL3407",
+        "A80K00",
+        "A7L8F1",
+        "ALL748",
+        "AT5037",
+        "AJ0580",
+        "A07K07",
+        "AC7808",
+        "AAJP08",
+        "A20721",
+        "A68488",
+        "AW3277",
+        "A7K780",
+        "A3E087",
+        "AX5536",
+        "AAC452",
+        "AJH477",
+        "AQL128",
+        "A38Y08"
       ]
     }
   }

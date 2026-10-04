@@ -1762,22 +1762,23 @@
   },
   "synth_test": {
     "n_samples": 2000,
-    "char_acc": 0.064,
-    "plate_acc": 0.0005,
-    "loss": 70.556842,
-    "data_loss": 70.41296,
-    "per_position_0": 0.0465,
-    "per_position_1": 0.0375,
-    "per_position_2": 0.08,
-    "per_position_3": 0.11,
-    "per_position_4": 0.071,
-    "per_position_5": 0.039,
-    "char_acc_mean_pos": 0.064,
-    "char_acc_min_pos": 0.0375,
-    "char_acc_max_pos": 0.11
+    "char_acc": 0.446667,
+    "plate_acc": 0.0075,
+    "loss": 14.556485,
+    "data_loss": 14.412606,
+    "per_position_0": 0.151,
+    "per_position_1": 0.487,
+    "per_position_2": 0.6155,
+    "per_position_3": 0.637,
+    "per_position_4": 0.4235,
+    "per_position_5": 0.366,
+    "char_acc_mean_pos": 0.446667,
+    "char_acc_min_pos": 0.151,
+    "char_acc_max_pos": 0.637
   },
   "gpu_memory": {
     "used_mb": 1117.5,
     "total_mb": 8187.5
-  }
+  },
+  "synth_backend": "generator_repo@43bac43"
 }

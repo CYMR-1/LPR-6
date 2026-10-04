@@ -1782,22 +1782,23 @@
   },
   "synth_test": {
     "n_samples": 2000,
-    "char_acc": 0.050417,
+    "char_acc": 0.188583,
     "plate_acc": 0.0,
-    "loss": 35.685031,
-    "data_loss": 35.633056,
-    "per_position_0": 0.042,
-    "per_position_1": 0.023,
-    "per_position_2": 0.0475,
-    "per_position_3": 0.0745,
-    "per_position_4": 0.064,
-    "per_position_5": 0.0515,
-    "char_acc_mean_pos": 0.050417,
-    "char_acc_min_pos": 0.023,
-    "char_acc_max_pos": 0.0745
+    "loss": 23.310757,
+    "data_loss": 23.258784,
+    "per_position_0": 0.032,
+    "per_position_1": 0.1745,
+    "per_position_2": 0.2225,
+    "per_position_3": 0.286,
+    "per_position_4": 0.262,
+    "per_position_5": 0.1545,
+    "char_acc_mean_pos": 0.188583,
+    "char_acc_min_pos": 0.032,
+    "char_acc_max_pos": 0.286
   },
   "gpu_memory": {
     "used_mb": 1157.5,
     "total_mb": 8187.5
-  }
+  },
+  "synth_backend": "generator_repo@43bac43"
 }

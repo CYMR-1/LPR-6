@@ -62,6 +62,7 @@ projectX/
 │  └─ CCPD_README.md              # 官方 README 存档（字符映射核对依据）
 ├─ data/
 │  ├─ ccpd/                       # CCPD 原图（不入库）
+│  ├─ external/                   # 外部合成域生成器仓库（不入库，见 §3.1；固定 commit 43bac43）
 │  ├─ synth_test/                 # 合成测试图（不入库；图像已并入 splits.npz）
 │  ├─ processed/                  # 预处理缓存 .npz（不入库）
 │  └─ manifest.csv                # 来源文件、六标签、子集名、裁剪参数、随机种子
@@ -78,8 +79,10 @@ projectX/
 ├─ train/
 │  ├─ train.py                    # 训练循环、早停、日志落盘
 │  ├─ phase1_prepare.py           # P1：CCPD 解析 + 裁剪 + 过滤统计（生成 .npz 缓存）
-│  ├─ phase15_split.py            # P1.5：号码去重划分 + 合成测试集生成
-│  ├─ synth_plates.py             # 合成域测试集生成器（PIL 确定性渲染）
+│  ├─ phase15_split.py            # P1.5：号码去重划分 + 合成测试集生成（按 synth.backend 分发）
+│  ├─ synth_from_generator.py     # ★ 合成域后端 generator_repo：外部生成器牌面级输出 + 同口径几何
+│  ├─ synth_plates.py             # 合成域后端 pil_renderer（内置 PIL 渲染器，保留可切回）
+│  ├─ swap_synth_to_generator.py  # 一次性迁移：只替换划分里的 synth 数组，历史 hard 集不变
 │  ├─ grad_check.py               # 数值梯度检查
 │  ├─ overfit_check.py            # 小样本过拟合自检
 │  ├─ parity_check.py             # NumPy / CuPy 前后端数值一致性校验
@@ -98,7 +101,10 @@ projectX/
 ├─ reports/
 │  ├─ run_all.py                  # 一键跑完全部启用的对照实验
 │  ├─ make_figs.py                # 由数值产物重画全部图片
+│  ├─ make_split_bar_figs.py      # 由汇总表重画各测试集变体对比柱状图（不训练）
 │  ├─ build_report_tables.py      # 由数值产物生成报告用 Markdown 表格
+│  ├─ rebuild_summary_tables.py   # 由 logs/*_run.json 重建汇总表（不训练）
+│  ├─ refresh_synth_eval.py       # 合成域换后端后：用现有检查点重测（不重训）
 │  ├─ configs/                    # 每次运行实际生效的变体配置（入库）
 │  ├─ logs/                       # 每实验逐 epoch 指标（入库，是结论的直接证据）
 │  ├─ figs/                       # 训练曲线、混淆矩阵、错误样本（不入库）
@@ -117,7 +123,20 @@ projectX/
 | 角色 | 来源 |
 | --- | --- |
 | 训练 / 验证 / 同分布测试 / 强扰动测试 | **CCPD**（<https://github.com/detectRecog/CCPD>，MIT） |
-| 合成域测试集 | 程序生成的仿真中国车牌（**只测试、不训练**） |
+| 合成域测试集 | 外部开源生成器 **[Nenger/chinese_licence_plate_generator](https://github.com/Nenger/chinese_licence_plate_generator)**（固定 commit `43bac43`，2018-04-09）的**牌面级**输出，**只测试、不训练** |
+
+合成域用其牌面级接口（`FakePlateGenerator.generate_one_plate()` + 上游
+`jittering_color/add_noise/jittering_blur/jittering_scale` 扰动链），再套用与
+CCPD **完全相同**的几何裁剪（裁左 1/7 → 128×32 → 灰度）；上游字符素材含
+字母 I/O，生成时按本项目 34 类字符集**拒绝重采**。该仓库的主打产物是
+"车牌贴进街景图"的**检测**数据集，本项目不做检测（§0.3 规范），故不使用其
+场景整图。生成器依赖 OpenCV（**仅数据生成环节**，训练/评测/预处理不依赖）。
+
+```bash
+# 克隆生成器（不入库，见 .gitignore 的 data/external/）
+git clone https://github.com/Nenger/chinese_licence_plate_generator data/external/chinese_licence_plate_generator
+# 生成器主分支即 43bac43；若上游有更新，可用 --branch 指定 tag/commit
+```
 
 真实车牌含隐私信息，**原图永不入库**（见 `.gitignore`）。CCPD 官方下载入口为
 Google Drive / 百度网盘；本项目在开发阶段使用了保留原始文件名的公开镜像
@@ -146,9 +165,15 @@ python train/phase1_prepare.py
 #   产出 20 张「裁剪图 + 标签字符串」网格图
 python evaluate/visualize.py check-grid
 
-# P1.5：号码去重划分 + 生成合成域测试集
+# P1.5：号码去重划分 + 生成合成域测试集（按 configs 的 synth.backend 选择后端）
 python train/phase15_split.py
 ```
+
+> 合成域生成器的克隆在 §3.1；`train/synth_from_generator.py --n 40` 可单独
+> 生成预览并打印溯源信息（生成器 commit / 种子 / 扰动链）。
+> **合成域只测试不训练**；若在已有划分上只更换合成域后端（保留历史 hard 集），
+> 用 `python train/swap_synth_to_generator.py`（内置"其余内容逐字节不变"校验），
+> 再用 `python reports/refresh_synth_eval.py` 以现有检查点**重测**（不重训）。
 
 > 说明：预处理缓存（`data/processed/ccpd_<W>x<H>.npz`）由 P1 写出，
 > 划分文件（`data/processed/splits.npz`）由 P1.5 写出；
@@ -246,9 +271,11 @@ python predict.py a.jpg b.jpg --json --save-debug reports/figs/_debug
   仍是主要错误来源（实验报告 §6.2）。
 
 > ⚠️ **域差距提醒**：模型训练于 CCPD 风格的真实车牌特写（同分布整牌
-> 91.8%），对风格差异大的输入会显著退化——实验报告 §8 实测合成域字符
-> 准确率仅约 5%。手机远距离拍摄后再放大裁切、字体差异大的图片都属于
-> "域外"输入，此时预测结果只能当参考。
+> 91.8%），对风格差异大的输入会显著退化——实验报告 §8 实测：外部生成器
+> 合成域（`generator_repo`）字符准确率 **43.3%**（基线）/ **66.9%**
+> （E1 独立架构），整牌几乎为 0；旧版内置渲染器合成域则只有约 5%。
+> 手机远距离拍摄后再放大裁切、字体差异大的图片都属于"域外"输入，
+> 此时预测结果只能当参考。
 
 ---
 
@@ -279,6 +306,8 @@ python -m venv .venv && .venv\Scripts\activate && pip install -r requirements.tx
 # 1) 数据（先解压 CCPD 到 data/ccpd/）
 python train/phase1_prepare.py
 python evaluate/visualize.py check-grid      # 人工核对 20 张
+git clone https://github.com/Nenger/chinese_licence_plate_generator data/external/chinese_licence_plate_generator
+python train/synth_from_generator.py --n 40  # 合成域自检 + 人工核对网格
 python train/phase15_split.py
 
 # 2) 正确性验证
@@ -291,6 +320,8 @@ python reports/run_all.py --baseline --only E1 E3 E4 E7 --skip-existing
 # 4) 独立评测 + 出图 + 报告表格
 python evaluate/main.py --run baseline_s42
 python reports/make_figs.py --runs baseline_s42
+python reports/rebuild_summary_tables.py     # 由 logs 重建汇总表（不训练）
+python reports/make_split_bar_figs.py        # 由汇总表重画变体对比图（不训练）
 python reports/build_report_tables.py --write --inject
 
 # 5) 报告见 reports/实验报告.md
@@ -311,6 +342,14 @@ python predict.py my_plate.jpg
 * **偏置项不参与 L2 惩罚**（§4.1）。
 * **必须同时报告字符准确率与整牌准确率**：字符准确率 95% 时整牌准确率上界仅约 73.5%。
 * **合成域与强扰动测试集在调参阶段不得参与任何选择决策**（§2.5 要求 3）。
+* **合成域后端由 `synth.backend` 决定**：默认 `generator_repo`（外部生成器
+  牌面级输出，需先按 §3.1 克隆，固定 commit `43bac43`，OpenCV 只在生成环节
+  使用）；`pil_renderer` 为内置确定性 PIL 渲染器，代码保留可切回，但
+  **不再是报告口径**——同一模型在两种合成集上测出的域差差别极大
+  （5.6% vs 41.6%），报告数字必须注明后端与 commit。
+* **合成域生成器上游含字母 I/O**，与本项目 34 类字符集不符，生成时按
+  `check_label_legal` 拒绝重采（2000 张共拒绝 912 张）；改生成器/种子后
+  必须重跑 `train/diag_domain_gap.py` 复核标签一致性。
 * **标准化统计量只在训练集上拟合**（mean=0.421204、std=0.221177、n=9000），
   验证 / 测试 / 强扰动 / 合成域一律复用，不得各自重新拟合。
 * **`evaluate/main.py` 不能命名为 `evaluate/evaluate.py`**：直接运行会把它注册为
