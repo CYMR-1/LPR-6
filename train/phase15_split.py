@@ -309,6 +309,42 @@ def _write_manifest_rows(
             writer.writerow({c: r.get(c, "") for c in MANIFEST_COLUMNS})
 
 
+def resolve_subset_tokens(cfg) -> tuple:
+    """从配置解析 base 子集与强扰动子集的**文件名 token**。
+
+    参数
+    ----
+    cfg : Config
+        全局配置；读取 ``ccpd.subsets``（键名 → token 映射）、
+        ``ccpd.train_subset``（base 的键名）、``ccpd.hard_subset_names``
+        （强扰动键名列表）。
+
+    返回
+    ----
+    tuple
+        ``(base_token, hard_tokens)``，例如
+        ``("ccpd_base", ["ccpd_blur", "ccpd_challenge", ...])``。
+
+    说明
+    ----
+    子集名不是目录名，而是**文件名尾部 token**（镜像约定
+    ``..._ccpd_base_012856.jpg``），解析见
+    :func:`models.ccpd_parse.extract_subset`。本函数把配置里的键名映射成
+    token，键名缺失时回退为 ``ccpd_<键名>``；配置缺项时回退到历史默认口径
+    （base + blur/challenge/rotate/tilt/weather/fn），保证与既有划分一致。
+    """
+    ccpd_cfg = cfg.get("ccpd", {}) if hasattr(cfg, "get") else {}
+    mapping = dict(ccpd_cfg.get("subsets") or {})
+    base_key = str(ccpd_cfg.get("train_subset", "base"))
+    hard_keys = list(ccpd_cfg.get("hard_subset_names")
+                     or ["blur", "challenge", "rotate", "tilt", "weather", "fn"])
+
+    def token(key: str) -> str:
+        return str(mapping.get(key, f"ccpd_{key}"))
+
+    return token(base_key), [token(k) for k in hard_keys]
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """P1.5 主入口。
 
@@ -348,18 +384,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(f"[P1.5] 载入缓存 {cache_path}: images{images.shape} labels{labels.shape}")
 
     # ---- ① 按子集拆分 base 与 hard ---------------------------------------
+    # 子集名来自文件名 token（不是目录名）；口径由 ccpd.subsets /
+    # ccpd.train_subset / ccpd.hard_subset_names 配置，缺省与历史一致。
+    base_token, hard_tokens = resolve_subset_tokens(cfg)
     subsets = np.array([r.get("subset", "") for r in records], dtype=object)
-    base_mask = subsets == "ccpd_base"
-    hard_mask = np.isin(subsets, [
-        "ccpd_blur", "ccpd_challenge", "ccpd_rotate",
-        "ccpd_tilt", "ccpd_weather", "ccpd_fn",
-    ])
+    base_mask = subsets == base_token
+    hard_mask = np.isin(subsets, hard_tokens)
     base_idx = np.flatnonzero(base_mask)
     hard_idx_all = np.flatnonzero(hard_mask)
-    print(f"[P1.5] base 样本 {len(base_idx)}，强扰动候选 {len(hard_idx_all)}")
+    print(f"[P1.5] base({base_token}) 样本 {len(base_idx)}，"
+          f"强扰动候选 {len(hard_idx_all)}（{', '.join(hard_tokens)}）")
 
     if len(base_idx) == 0:
-        print("[P1.5] 错误：没有 ccpd_base 样本")
+        print(f"[P1.5] 错误：没有 {base_token} 样本")
         return 2
 
     # ---- ② 号码去重划分 ---------------------------------------------------

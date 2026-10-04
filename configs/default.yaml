@@ -26,7 +26,7 @@ base_seeds: [42, 43, 44]
 # 数据路径（§2.2 / §8.3）：data/ccpd 与 data/synth_test 均不入库
 # -----------------------------------------------------------------------------
 paths:
-  ccpd_root: "data/ccpd"                 # CCPD 原图（按子集分目录）
+  ccpd_root: "data/ccpd"                 # CCPD 原图（扁平 30000 张；子集名在文件名 token，见 ccpd.subsets）
   synth_root: "data/synth_test"          # 合成域测试图
   synth_preview: "data/synth_test_preview"  # 合成过程人工核对预览（不入库）
   processed_dir: "data/processed"        # .npz 预处理缓存
@@ -58,7 +58,11 @@ charset:
 # CCPD 解析与裁剪（§2.3）
 # -----------------------------------------------------------------------------
 ccpd:
-  # 子集目录名 -> 用途。CCPD 官方目录名为小写 ccpd_* 形式
+  # 子集名（**文件名 token**，不是目录名）-> 用途。
+  # 本项目用的镜像把子集名追加在文件名尾部，形如
+  # "...-118-10_ccpd_base_012856.jpg"；解析见 models/ccpd_parse.py::extract_subset。
+  # data/ccpd/ 因此可以是扁平目录（本仓库即如此），也可用子目录
+  # （discover_images 用 rglob 递归扫描）——判定子集只看文件名 token。
   subsets:
     base: "ccpd_base"
     blur: "ccpd_blur"
@@ -68,6 +72,9 @@ ccpd:
     weather: "ccpd_weather"
     fn: "ccpd_fn"
     green: "ccpd_green"                  # 8 位新能源牌，必须跳过（§2.4 只保留 7 位）
+    db: "ccpd_db"                        # 模糊子集：当前不参与任何划分（既非 base 也非强扰动）
+    np: "ccpd_np"                        # 无角点标注（文件名缺四角点），丢弃
+  # 下面的键由 train/phase15_split.py::resolve_subset_tokens 实际读取
   train_subset: "base"
   # 强扰动测试集来源子集（§2.5）
   hard_subset_names: ["blur", "challenge", "rotate", "tilt", "weather", "fn"]

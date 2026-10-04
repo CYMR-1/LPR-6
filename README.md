@@ -61,10 +61,12 @@ projectX/
 ├─ docs/
 │  └─ CCPD_README.md              # 官方 README 存档（字符映射核对依据）
 ├─ data/
-│  ├─ ccpd/                       # CCPD 原图（不入库）
+│  ├─ ccpd/                       # CCPD 原图（不入库）；**扁平**放 30000 张，子集名在文件名尾部 token（见 §3.1）
+│  ├─ raw_dl/                     # 下载压缩包（如 ccpd_subset_30k.zip，不入库）
 │  ├─ external/                   # 外部合成域生成器仓库（不入库，见 §3.1；固定 commit 43bac43）
-│  ├─ synth_test/                 # 合成测试图（不入库；图像已并入 splits.npz）
-│  ├─ processed/                  # 预处理缓存 .npz（不入库）
+│  ├─ synth_test/                 # 合成测试图输出目录（不入库；本仓库为空，图像已并入 splits.npz）
+│  ├─ synth_test_preview/         # 合成过程逐张预览（不入库，人工核对用）
+│  ├─ processed/                  # 预处理缓存与划分 .npz（不入库；含 *.pre_*_bak 备份）
 │  └─ manifest.csv                # 来源文件、六标签、子集名、裁剪参数、随机种子
 ├─ models/
 │  ├─ config.py                   # 配置加载 / 点分路径补丁 / Git 溯源
@@ -143,17 +145,55 @@ Google Drive / 百度网盘；本项目在开发阶段使用了保留原始文�
 （<https://huggingface.co/datasets/zenitsu09/ccpd-subset-30k>，MIT），
 因为 CCPD 的标注**内嵌在文件名中**，镜像必须保留原始文件名才有价值。
 
-把解压后的 CCPD 图片按子集放入 `data/ccpd/`：
+#### 目录布局：`data/ccpd/` 是**扁平**的，子集名在**文件名**里
+
+本仓库的 `data/ccpd/` 下**没有** `ccpd_base/`、`ccpd_blur/` 这类子目录——
+30000 张 jpg 直接平铺在 `data/ccpd/` 根下，子集名以
+`_ccpd_<subset>_<序号>.jpg` 的 token **追加在文件名尾部**（该镜像的命名约定）：
 
 ```text
 data/ccpd/
-├─ ccpd_base/        # 训练 / 验证 / 同分布测试
-├─ ccpd_blur/        # 强扰动测试
-├─ ccpd_challenge/   # 强扰动测试
-├─ ccpd_rotate/      # 强扰动测试
-├─ ccpd_tilt/        # 强扰动测试
-└─ ccpd_weather/     # 强扰动测试
+├─ 00292624521073-90_83-334,464_452,506-440,501_341,503_339,470_438,468-0_16_15_29_24_33_27-118-10_ccpd_base_012856.jpg
+├─ 0023-2_2-286,531_360,558-360,558_286,555_286,531_360,534-0_0_4_32_4_33_33-101-5_ccpd_blur_009176.jpg
+├─ 0021-1_0-302,471_372,497-372,495_303,497_302,473_371,471-0_0_30_16_29_32_32-75-21_ccpd_challenge_020298.jpg
+├─ ...                                                     ..._ccpd_fn_027078.jpg
+├─ ...                                                     ..._ccpd_rotate_023117.jpg
+├─ ...                                                     ..._ccpd_tilt_025833.jpg
+└─ ...                                                     ..._ccpd_weather_006602.jpg
 ```
+
+* 子集**不由目录名判定**，而是由 `models/ccpd_parse.py::extract_subset`
+  从文件名解析（兼容 `ccpd_base` 连写与 `ccpd` + `base` 拆开两种形式）。
+* 图片发现用 `models/dataset.py::discover_images` 的 **`rglob` 递归扫描**，
+  因此**也允许**用子目录组织（例如官方 CCPD 的 `ccpd_base/` 等）；但无论放哪，
+  **文件名里必须带 `_ccpd_<subset>_` token**，否则该图会被判为"无子集"而在
+  划分时被忽略（`phase15_split.py` 会因找不到 `ccpd_base` 样本而报错退出）。
+* 空目录（例如本仓库遗留的空 `data/ccpd/ccpd_base/`）不影响扫描结果。
+
+`zenitsu09/ccpd-subset-30k` 实测子集分布（本项目扫描 30000 张所得）：
+
+| 子集 token | 张数 | 用途 |
+| --- | --- | --- |
+| `ccpd_base` | 14987 | **训练 / 验证 / 同分布测试**（`split.train_size` 等上游唯一来源） |
+| `ccpd_blur` | 1845 | 强扰动测试 |
+| `ccpd_challenge` | 4077 | 强扰动测试 |
+| `ccpd_rotate` | 1050 | 强扰动测试 |
+| `ccpd_tilt` | 2504 | 强扰动测试 |
+| `ccpd_weather` | 1021 | 强扰动测试 |
+| `ccpd_fn` | 1822 | 强扰动测试 |
+| `ccpd_green` | 1179 | **丢弃**：新能源 8 字符牌，与本任务 6 位定义不符 |
+| `ccpd_np` | 480 | **丢弃**：文件名无角点标注，无法定位车牌 |
+| `ccpd_db` | 1035 | **当前未使用**：既非 base 也非 6 类强扰动，缓存后不参与任何划分 |
+
+因此 30000 − 1179 − 480 = **28341** 张进入缓存（与报告 §2.2 一致）。
+`ccpd_db` 仍会被预处理并写入缓存/清单，只是不落入任何集合。
+
+> **若你使用官方 CCPD 原始文件名**（不带 `_ccpd_<subset>_` token，子集由目录名
+> 表示），需要先用脚本把目录名补进文件名，或修改
+> `models/ccpd_parse.py::extract_subset` 传入所在目录名；否则划分会失败。
+
+把下载到的压缩包放 `data/raw_dl/`（本项目实际放在
+`data/raw_dl/ccpd_subset_30k.zip`），解压出的 jpg 直接摊进 `data/ccpd/` 即可。
 
 ### 3.2 一键数据准备
 
@@ -342,6 +382,12 @@ python predict.py my_plate.jpg
 * **偏置项不参与 L2 惩罚**（§4.1）。
 * **必须同时报告字符准确率与整牌准确率**：字符准确率 95% 时整牌准确率上界仅约 73.5%。
 * **合成域与强扰动测试集在调参阶段不得参与任何选择决策**（§2.5 要求 3）。
+* **CCPD 的子集名来自文件名 token，不是目录名**：形如
+  `...-118-10_ccpd_base_012856.jpg`（本仓库 `data/ccpd/` 就是扁平布局）。
+  若改用官方 CCPD 原始文件名（子集只体现在目录名），`extract_subset` 解析不到
+  token，划分会直接报"没有 ccpd_base 样本"；处理办法见 §3.1。
+  `ccpd.subsets` / `ccpd.train_subset` / `ccpd.hard_subset_names`
+  由 `train/phase15_split.py::resolve_subset_tokens` 实际读取。
 * **合成域后端由 `synth.backend` 决定**：默认 `generator_repo`（外部生成器
   牌面级输出，需先按 §3.1 克隆，固定 commit `43bac43`，OpenCV 只在生成环节
   使用）；`pil_renderer` 为内置确定性 PIL 渲染器，代码保留可切回，但
