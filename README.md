@@ -24,13 +24,9 @@
 * 模型结构：`shared` / `sigmoid` / `hidden_dim=256` / 头维度 `[34]*6`，**参数量 1,101,260**，输出节点 204。
 * 独立评测（`python evaluate/main.py --run final_s42`，载入检查点、**不重训**）复现出上表**逐位一致**的指标（val 98.42% / 91.95%，test 98.40% / 91.90%，hard 73.17% / 34.40%，synth 45.52% / 0.80%）；CPU 单张前向 **0.20–0.28 ms**（50 张中位数，含标准化与六头 softmax，实测随机器负载波动）。
 * 训练环境：Python 3.13 + numpy + cupy-cuda12x（RTX 4060 Laptop，8 GB）；单次训练约 146–183 秒（早停或跑满 80 轮），三个种子合计约 9 分钟。
-* 复现最终模型必须使用 `reports/configs/final_s*.yaml`：它与 `configs/default.yaml` 的唯一实质差别是 `augmentation.baseline_level: none`
-  （默认配置是 `weak`），用默认配置训练会得到完全不同的结果。
+* 复现最终模型必须使用 `reports/configs/final_s*.yaml`：它与 `configs/default.yaml` 的唯一实质差别是 `augmentation.baseline_level: none`（默认配置是 `weak`），用默认配置训练会得到完全不同的结果。
 
-> ⚠️ **域差距提醒**：模型训练于 CCPD 风格的真实车牌特写，对风格差异大的输入会
-> 显著退化——同分布整牌 91.9%，而同分布之外的强扰动集整牌 34.4%、合成域字符
-> 45.5%（34 类随机猜测为 2.9%）。手机远距离拍摄再放大裁切、字体差异大的图片
-> 都属于"域外"输入，此时预测结果只能当参考。
+> ⚠️ **域差距提醒**：模型训练于 CCPD 风格的真实车牌特写，对风格差异大的输入会显著退化——同分布整牌 91.9%，而同分布之外的强扰动集整牌 34.4%、合成域字符45.5%（34 类随机猜测为 2.9%）。手机远距离拍摄再放大裁切、字体差异大的图片都属于"域外"输入，此时预测结果只能当参考。
 
 ---
 
@@ -110,10 +106,7 @@ pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 pip install cupy-cuda12x
 ```
 
-**无 GPU 环境必须能回退纯 CPU 运行**：把 `configs/default.yaml` 的
-`optim.backend` 设为 `"numpy"` 即可，程序启动时也会自动探测 CuPy，不可用时
-打印告警并回退，不会中断运行。合成域生成器额外需要 OpenCV（**仅数据生成环节**，
-训练 / 评测 / 预处理不依赖）。
+**无 GPU 环境必须能回退纯 CPU 运行**：把 `configs/default.yaml` 的`optim.backend` 设为 `"numpy"` 即可，程序启动时也会自动探测 CuPy，不可用时打印告警并回退，不会中断运行。合成域生成器额外需要 OpenCV（**仅数据生成环节**，训练 / 评测 / 预处理不依赖）。
 
 ---
 
@@ -126,11 +119,7 @@ pip install cupy-cuda12x
 | 训练 / 验证 / 同分布测试 / 强扰动测试 | **CCPD**（<https://github.com/detectRecog/CCPD>，MIT） |
 | 合成域测试集 | 外部开源生成器 **[Nenger/chinese_licence_plate_generator](https://github.com/Nenger/chinese_licence_plate_generator)**（固定 commit `43bac43`）的**牌面级**输出，**只测试、不训练** |
 
-合成域用其牌面级接口（`FakePlateGenerator.generate_one_plate()` + 上游
-`jittering_color/add_noise/jittering_blur/jittering_scale` 扰动链），再套用与
-CCPD **完全相同**的几何裁剪（裁左 1/7 → 128×32 → 灰度）；上游字符素材含
-字母 I/O，生成时按本项目 34 类字符集**拒绝重采**。该仓库的主打产物是
-"车牌贴进街景图"的**检测**数据集，本项目不做检测，故不使用其场景整图。
+合成域用其牌面级接口（`FakePlateGenerator.generate_one_plate()` + 上游`jittering_color/add_noise/jittering_blur/jittering_scale` 扰动链），再套用与 CCPD **完全相同**的几何裁剪（裁左 1/7 → 128×32 → 灰度）；上游字符素材含字母 I/O，生成时按本项目 34 类字符集**拒绝重采**。该仓库的主打产物是"车牌贴进街景图"的**检测**数据集，本项目不做检测，故不使用其场景整图。
 
 ```bash
 # 克隆生成器（不入库，见 .gitignore 的 data/external/）
@@ -144,9 +133,7 @@ Google Drive / 百度网盘；本项目开发阶段使用了保留原始文件�
 
 #### 目录布局：`data/ccpd/` 是**扁平**的，子集名在**文件名**里
 
-本仓库的 `data/ccpd/` 下**没有** `ccpd_base/`、`ccpd_blur/` 这类子目录——
-30000 张 jpg 直接平铺，子集名以 `_ccpd_<subset>_<序号>.jpg` 的 token
-**追加在文件名尾部**（该镜像的命名约定）：
+本仓库的 `data/ccpd/` 下**没有** `ccpd_base/`、`ccpd_blur/` 这类子目录——30000 张 jpg 直接平铺，子集名以 `_ccpd_<subset>_<序号>.jpg` 的 token **追加在文件名尾部**（该镜像的命名约定）：
 
 ```text
 data/ccpd/
@@ -159,12 +146,8 @@ data/ccpd/
 └─ ...                                                     ..._ccpd_weather_006602.jpg
 ```
 
-* 子集**不由目录名判定**，而是由 `models/ccpd_parse.py::extract_subset`
-  从文件名解析（兼容 `ccpd_base` 连写与 `ccpd` + `base` 拆开两种形式）。
-* 图片发现用 `models/dataset.py::discover_images` 的 **`rglob` 递归扫描**，
-  因此**也允许**用子目录组织；但无论放哪，**文件名里必须带
-  `_ccpd_<subset>_` token**，否则该图会被判为"无子集"而在划分时被忽略
-  （`split_dataset.py` 会因找不到 `ccpd_base` 样本而报错退出）。
+* 子集**不由目录名判定**，而是由 `models/ccpd_parse.py::extract_subset`从文件名解析（兼容 `ccpd_base` 连写与 `ccpd` + `base` 拆开两种形式）。
+* 图片发现用 `models/dataset.py::discover_images` 的 **`rglob` 递归扫描**，因此**也允许**用子目录组织；但无论放哪，**文件名里必须带`_ccpd_<subset>_` token**，否则该图会被判为"无子集"而在划分时被忽略（`split_dataset.py` 会因找不到 `ccpd_base` 样本而报错退出）。
 
 `zenitsu09/ccpd-subset-30k` 实测子集分布（扫描 30000 张所得）：
 
@@ -183,9 +166,7 @@ data/ccpd/
 
 因此 30000 − 1179 − 480 = **28341** 张进入缓存。
 
-> **若你使用官方 CCPD 原始文件名**（不带 `_ccpd_<subset>_` token，子集由目录名
-> 表示），需要先用脚本把目录名补进文件名，或修改
-> `models/ccpd_parse.py::extract_subset` 传入所在目录名；否则划分会失败。
+> **若你使用官方 CCPD 原始文件名**（不带 `_ccpd_<subset>_` token，子集由目录名表示），需要先用脚本把目录名补进文件名，或修改`models/ccpd_parse.py::extract_subset` 传入所在目录名；否则划分会失败。
 
 把下载到的压缩包放 `data/raw_dl/`，解压出的 jpg 直接摊进 `data/ccpd/` 即可。
 
@@ -212,20 +193,11 @@ python evaluate/visualize.py check-grid
 python train/split_dataset.py
 ```
 
-* 剪裁图文件名为 `<缓存行号>_<车牌文本>_<来源文件名>.png`，
-  行号与 `data/processed/ccpd_<W>x<H>.npz` 的行、以及 `splits.npz` 里的下标
-  **严格一一对应**，可逐张对照标签；剪裁图本质是缓存内容的可视化副本，
-  因此不入库（在 `data/crops/` 下，已被 `.gitignore` 排除）。
-* 划分严格按**车牌号码去重**：同一号码的全部图片归入同一集合，且
-  train/val/test/hard 两两交集为 0、合成域与真实域无重叠（`split_summary.json`
-  记录全部交集计数）。
-* 标准化统计量**只在训练集上拟合**（mean=0.421204、std=0.221177、n=9000），
-  验证 / 测试 / 强扰动 / 合成域一律复用，不得各自重新拟合。
-* 合成域生成器可单独预览：`python train/synth_from_generator.py --n 40`，
-  会打印生成器 commit / 种子 / 扰动链并输出人工核对网格。
-* 预处理缓存由 `prepare_data.py` 写出、划分文件由 `split_dataset.py` 写出；
-  `train/train.py` 只读取这两个文件，
-  缺失时报错并提示先跑对应步骤，**不会**自动重建（避免口径被无意改变）。
+* 剪裁图文件名为 `<缓存行号>_<车牌文本>_<来源文件名>.png`，行号与 `data/processed/ccpd_<W>x<H>.npz` 的行、以及 `splits.npz` 里的下标**严格一一对应**，可逐张对照标签；剪裁图本质是缓存内容的可视化副本，因此不入库（在 `data/crops/` 下，已被 `.gitignore` 排除）。
+* 划分严格按**车牌号码去重**：同一号码的全部图片归入同一集合，且train/val/test/hard 两两交集为 0、合成域与真实域无重叠（`split_summary.json`记录全部交集计数）。
+* 标准化统计量**只在训练集上拟合**（mean=0.421204、std=0.221177、n=9000），验证 / 测试 / 强扰动 / 合成域一律复用，不得各自重新拟合。
+* 合成域生成器可单独预览：`python train/synth_from_generator.py --n 40`，会打印生成器 commit / 种子 / 扰动链并输出人工核对网格。
+* 预处理缓存由 `prepare_data.py` 写出、划分文件由 `split_dataset.py` 写出；`train/train.py` 只读取这两个文件，缺失时报错并提示先跑对应步骤，**不会**自动重建（避免口径被无意改变）。
 
 ---
 
@@ -249,23 +221,15 @@ python train/train.py --config reports/configs/final_s42.yaml --name final_s42 -
 python evaluate/main.py --run final_s42
 ```
 
-* `train/train.py` 会在 `reports/logs/` 写出 `<name>_history.csv`（逐 epoch）
-  与 `<name>_run.json`（含 commit / 配置指纹 / 种子 / 三测试集指标），并把最佳
-  验证权重存为 `reports/checkpoints/<name>_best.npz`。
-* `evaluate/main.py --run <name>` 会读取 `reports/configs/<name>.yaml`（缺失时
-  回退 `reports/configs/final.yaml`），并写出 `<name>_eval.json`、
-  `<name>_eval_arrays.npz`（逐位置 34×34 混淆矩阵）、`<name>_errors.npz`
-  （错误样本图像与真实/预测标签）。
-* 训练、评测与推理的输入缓存、划分文件与 `ccpd.input_size` **必须配套**：
-  换输入尺寸就要重建对应缓存与划分（`paths.splits_file` 可切换）。
+* `train/train.py` 会在 `reports/logs/` 写出 `<name>_history.csv`（逐 epoch）与 `<name>_run.json`（含 commit / 配置指纹 / 种子 / 三测试集指标），并把最佳验证权重存为 `reports/checkpoints/<name>_best.npz`。
+* `evaluate/main.py --run <name>` 会读取 `reports/configs/<name>.yaml`（缺失时回退 `reports/configs/final.yaml`），并写出 `<name>_eval.json`、 `<name>_eval_arrays.npz`（逐位置 34×34 混淆矩阵）、`<name>_errors.npz`（错误样本图像与真实/预测标签）。
+* 训练、评测与推理的输入缓存、划分文件与 `ccpd.input_size` **必须配套**：换输入尺寸就要重建对应缓存与划分（`paths.splits_file` 可切换）。
 
 ---
 
 ## 6. 识别自己准备的车牌（推理）
 
-最终权重在 `reports/checkpoints/final_s{42,43,44}_best.npz`。用根目录的
-`predict.py` 即可识别任意一张车牌图（本项目**不做车牌检测**：车牌区域需要你
-自己裁，或用 `--corners` 给出四角顶点）：
+最终权重在 `reports/checkpoints/final_s{42,43,44}_best.npz`。用根目录的`predict.py` 即可识别任意一张车牌图（本项目**不做车牌检测**：车牌区域需要你自己裁，或用 `--corners` 给出四角顶点）：
 
 ```bash
 # 图片是完整 7 位车牌正视图（含首位省份汉字）——脚本自动裁掉汉字区域
@@ -285,18 +249,10 @@ python predict.py car_photo.jpg --corners "433,341;120,315;128,272;445,295"
 python predict.py a.jpg b.jpg --json --save-debug reports/figs/_debug
 ```
 
-* `--run` 选择检查点（默认 `final_s42`，同分布字符 98.40% / 整牌 91.90%）；
-  `--ckpt PATH` 可直接指定 `*_best.npz` 文件。
-* 预处理与训练**严格同口径**：透视矫正（可选）→ 裁掉首位汉字 → 缩放 128×32 →
-  灰度 → [0,1] → 用**训练集拟合的**标准化统计量做零均值单位方差（绝不用你自己的
-  图片现算均值/方差，否则输入分布就变了）。
-* 输出：六位字符串、逐位置置信度、整牌联合置信度（六位概率乘积）。
-  **整牌置信度极低（如 < 0.05）通常意味着预处理就错了**（`--mode` 选错、裁剪区域
-  不对），先用 `--save-debug` 看一眼实际送入模型的图；反过来，置信度高也不保证
-  逐位全对——字形相近对（8/B、5/S、2/Z、1/7）仍是主要错误来源。
-* 验证方式：把 `reports/logs/final_s42_errors.npz` 里的错误样本（`error_images`
-  是 **uint8 原始像素**）存成 PNG，再用 `--mode cropped` 识别，结果与
-  `final_s42_eval.json` 的预测**逐位一致**，可用于确认推理链路未被改坏。
+* `--run` 选择检查点（默认 `final_s42`，同分布字符 98.40% / 整牌 91.90%）；`--ckpt PATH` 可直接指定 `*_best.npz` 文件。
+* 预处理与训练**严格同口径**：透视矫正（可选）→ 裁掉首位汉字 → 缩放 128×32 →灰度 → [0,1] → 用**训练集拟合的**标准化统计量做零均值单位方差（绝不用你自己的图片现算均值/方差，否则输入分布就变了）。
+* 输出：六位字符串、逐位置置信度、整牌联合置信度（六位概率乘积）。**整牌置信度极低（如 < 0.05）通常意味着预处理就错了**（`--mode` 选错、裁剪区域不对），先用 `--save-debug` 看一眼实际送入模型的图；反过来，置信度高也不保证逐位全对——字形相近对（8/B、5/S、2/Z、1/7）仍是主要错误来源。
+* 验证方式：把 `reports/logs/final_s42_errors.npz` 里的错误样本（`error_images`是 **uint8 原始像素**）存成 PNG，再用 `--mode cropped` 识别，结果与`final_s42_eval.json` 的预测**逐位一致**，可用于确认推理链路未被改坏。
 
 ---
 
@@ -313,39 +269,22 @@ python predict.py a.jpg b.jpg --json --save-debug reports/figs/_debug
 
 > ⚠️ **`dirty=True` 的结果不可作为最终结论。** 重跑前请先提交代码。
 
-最终模型的三个检查点记录在 `reports/logs/final_s*_run.json`：训练时
-`commit=eee708e`、`dirty=true`、配置指纹 `a5cbaf953280`、后端 `cupy`。
-（`run.json` 内的 `meta.run_name` 保留训练时的原始运行名，权重与数值未做任何改动；
-`final_s*` 即为该口径的三次运行。）
+最终模型的三个检查点记录在 `reports/logs/final_s*_run.json`：训练时`commit=eee708e`、`dirty=true`、配置指纹 `a5cbaf953280`、后端 `cupy`。（`run.json` 内的 `meta.run_name` 保留训练时的原始运行名，权重与数值未做任何改动；`final_s*` 即为该口径的三次运行。）
 
 口径要点（易错处）：
 
-* **类别索引顺序遵循 CCPD 官方 `ads` 表**：索引 `0–23` 为字母 `A–Z`（去掉 `I`、`O`），
-  `24–33` 为数字 `0–9`。因此 `A→0`、`Z→23`、`0→24`、`9→33`。官方表来源已存档于
-  `docs/CCPD_README.md`。
+* **类别索引顺序遵循 CCPD 官方 `ads` 表**：索引 `0–23` 为字母 `A–Z`（去掉 `I`、`O`），`24–33` 为数字 `0–9`。因此 `A→0`、`Z→23`、`0→24`、`9→33`。官方表来源已存档于`docs/CCPD_README.md`。
 * **偏置项不参与 L2 惩罚**，L2 直接写进损失（`loss.l2_lambda`）。
 * **必须同时报告字符准确率与整牌准确率**：字符准确率 95% 时整牌准确率上界仅约 73.5%。
-* **`evaluate/main.py` 不能命名为 `evaluate/evaluate.py`**：直接运行会把它注册为
-  顶层模块 `evaluate`，遮蔽同名包，导致
-  `ModuleNotFoundError: No module named 'evaluate.model_eval'`。
-* **评测入口必须载入检查点**：`Params.load` 是 classmethod、返回 `(Params, extra)`；
-  写成 `params.load(ckpt)` 会丢弃返回值、静默使用随机权重（本项目踩过这个坑，
-  表现为独立评测 3.10% 而训练脚本 86.73%）。
-* **`configs/default.yaml` 的增强档位（`weak`）是针对本架构调过的默认值**，但
-  **不是最终模型口径**：MLP 无平移不变性，几何增强（旋转/缩放/平移）在本架构上
-  产生负效果，最终模型使用 `reports/configs/final_s*.yaml`（`baseline_level: none`）。
-* **`reports/checkpoints/` 只入库最终权重** `final_s{42,43,44}_best.npz`
-  （3 个文件共约 12 MB，是"最终训练好的模型"本体，不可由脚本重建）；
-  其余权重（冒烟 / 临时 / 中间轮次）仍不入库。`reports/figs/` 不入库
-  （可由日志重绘），`reports/logs/` 与 `reports/configs/` 入库
-  （体积小、是结论的直接证据）。
+* **`evaluate/main.py` 不能命名为 `evaluate/evaluate.py`**：直接运行会把它注册为顶层模块 `evaluate`，遮蔽同名包，导致 `ModuleNotFoundError: No module named 'evaluate.model_eval'`。
+* **评测入口必须载入检查点**：`Params.load` 是 classmethod、返回 `(Params, extra)`；写成 `params.load(ckpt)` 会丢弃返回值、静默使用随机权重（本项目踩过这个坑，表现为独立评测 3.10% 而训练脚本 86.73%）。
+* **`configs/default.yaml` 的增强档位（`weak`）是针对本架构调过的默认值**，但**不是最终模型口径**：MLP 无平移不变性，几何增强（旋转/缩放/平移）在本架构上产生负效果，最终模型使用 `reports/configs/final_s*.yaml`（`baseline_level: none`）。
+* **`reports/checkpoints/` 只入库最终权重** `final_s{42,43,44}_best.npz`（3 个文件共约 12 MB，是"最终训练好的模型"本体，不可由脚本重建）；其余权重（冒烟 / 临时 / 中间轮次）仍不入库。`reports/figs/` 不入库（可由日志重绘），`reports/logs/` 与 `reports/configs/` 入库（体积小、是结论的直接证据）。
 
 ---
 
 ## 8. 许可与致谢
 
-* CCPD 数据集：MIT License，论文 *Towards End-to-End License Plate Detection and
-  Recognition: A Large Dataset and Baseline* (ECCV 2018)。
-* 合成域生成器：[Nenger/chinese_licence_plate_generator](https://github.com/Nenger/chinese_licence_plate_generator)
-  （固定 commit `43bac43`）。
+* CCPD 数据集：MIT License，论文 *Towards End-to-End License Plate Detection and Recognition: A Large Dataset and Baseline* (ECCV 2018)。
+* 合成域生成器：[Nenger/chinese_licence_plate_generator](https://github.com/Nenger/chinese_licence_plate_generator)（固定 commit `43bac43`）。
 * 本项目不进行车牌检测，仅使用 CCPD 文件名中标注的四角顶点做透视矫正与裁剪。
