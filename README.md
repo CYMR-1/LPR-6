@@ -126,10 +126,7 @@ pip install cupy-cuda12x
 git clone https://github.com/Nenger/chinese_licence_plate_generator data/external/chinese_licence_plate_generator
 ```
 
-真实车牌含隐私信息，**原图永不入库**（见 `.gitignore`）。CCPD 官方下载入口为
-Google Drive / 百度网盘；本项目开发阶段使用了保留原始文件名的公开镜像
-（<https://huggingface.co/datasets/zenitsu09/ccpd-subset-30k>，MIT），
-因为 CCPD 的标注**内嵌在文件名中**，镜像必须保留原始文件名才有价值。
+真实车牌含隐私信息，**原图永不入库**（见 `.gitignore`）。CCPD 官方下载入口为 Google Drive / 百度网盘；本项目开发阶段使用了保留原始文件名的公开镜像（<https://huggingface.co/datasets/zenitsu09/ccpd-subset-30k>，MIT）。
 
 #### 目录布局：`data/ccpd/` 是**扁平**的，子集名在**文件名**里
 
