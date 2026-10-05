@@ -4,6 +4,8 @@
 产出
 ----
 * ``data/processed/ccpd_<W>x<H>.npz`` —— 预处理缓存（uint8 灰度裁剪图 + 标签）
+* ``data/crops/<tag>/*.png``          —— 剪裁后的图片本体，可肉眼核对（默认写出）
+                                          文件名 = 缓存行号_车牌文本_来源文件名.png
 * ``data/manifest.csv``               —— 每张图可追溯的来源记录（§2.5 要求 2）
 * ``reports/logs/prepare_stats.json`` —— 过滤统计（各类丢弃原因计数）
 
@@ -11,15 +13,19 @@
 ----------
 1. 字符集断言 = 34（由 ``models.charset`` 在导入时完成）；
 2. 抽样 20 张人工核对通过（由 ``evaluate/visualize.py check-grid`` 产出网格图）；
+   逐张核对可直接看 ``data/crops/<tag>/`` 下的 PNG（文件名含行号与车牌文本）；
 3. 过滤规则生效且丢弃统计已记录。
 
 用法
 ----
 ::
 
-    python train/prepare_data.py                 # 全量
+    python train/prepare_data.py                 # 全量（默认同时保存剪裁图 PNG）
     python train/prepare_data.py --limit 2000    # 只处理前 2000 张（快速验证）
     python train/prepare_data.py --workers 8     # 指定并行进程数
+    python train/prepare_data.py --no-save-crops # 只写缓存，不写剪裁图
+    python train/prepare_data.py --save-crops D  # 剪裁图写到目录 D
+    python train/prepare_data.py --save-crops-n  # 只保存前 N 张剪裁图
 """
 
 from __future__ import annotations
@@ -27,6 +33,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -54,8 +61,8 @@ from models.ccpd_parse import (
     preprocess_crop,
     validate_record,
 )
-from models.charset import SEQ_LEN
-from models.config import ensure_dirs, load_config, resolve_path
+from models.charset import SEQ_LEN, decode_batch
+from models.config import ROOT, ensure_dirs, load_config, resolve_path
 
 
 # =============================================================================
@@ -153,13 +160,105 @@ def _process_one(path_str: str) -> Tuple[str, Optional[str], Optional[np.ndarray
     return path_str, None, img_u8, rec_dict, {"image_size": list(image_size)}
 
 
+def _crop_filename(i: int, text: str, src: str) -> str:
+    """拼剪裁图文件名：``<行号>_<车牌文本>_<来源文件名主干>.png``。
+
+    参数
+    ----
+    i : int
+        缓存行号（排序后的下标）。
+    text : str
+        车牌字符文本（6 位）。
+    src : str
+        来源图片路径。
+
+    返回
+    ----
+    str
+        Windows 安全（非法字符已替换为 ``_``）的文件名，含 ``.png``。
+
+    形状
+    ----
+    标量 -> 标量
+
+    说明
+    ----
+    行号即缓存下标，与 ``splits.npz`` 用同一坐标系，因此"文件名 ↔ 标签 ↔
+    划分"三者可逐张对照；来源文件名主干本身已含 CCPD 的全部字段（含号码去重
+    键），故不再重复拼进去。
+    """
+    safe_src = re.sub(r"[^0-9A-Za-z._-]", "_", Path(src).stem)[:140]
+    return f"{i:06d}_{text or 'unknown'}_{safe_src}.png"
+
+
+def save_crops(
+    images: np.ndarray,
+    labels: np.ndarray,
+    sources: Sequence[str],
+    out_dir: Path,
+    limit: int = 0,
+    verbose: bool = True,
+) -> int:
+    """把剪裁后的图片逐张写成 PNG，供人工核对。
+
+    参数
+    ----
+    images : np.ndarray
+        ``(N, H, W)`` uint8 灰度裁剪图，与缓存逐行相同。
+    labels : np.ndarray
+        ``(N, 6)`` int64 标签。
+    sources : Sequence[str]
+        每行对应的来源图片路径。
+    out_dir : Path
+        输出目录。
+    limit : int
+        只写前 N 张；``0`` 表示全部。
+    verbose : bool
+        是否打印进度。
+
+    返回
+    ----
+    int
+        成功写出的张数。
+
+    形状
+    ----
+    ``(N, H, W)`` uint8 -> ``N`` 个 PNG 文件
+    """
+    from PIL import Image  # 局部导入：与 worker 内已有写法一致，不增模块级依赖
+
+    n = int(images.shape[0]) if limit <= 0 else min(int(limit), int(images.shape[0]))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    texts = decode_batch(labels[:n]) if n else []
+    t0 = time.time()
+    saved = 0
+    for i in range(n):
+        name = _crop_filename(i, texts[i], str(sources[i]))
+        try:
+            Image.fromarray(np.asarray(images[i], dtype=np.uint8), mode="L").save(
+                out_dir / name, optimize=True)
+            saved += 1
+        except OSError as exc:  # 单张失败不应中断整批
+            print(f"  ! 剪裁图写出失败（跳过）：{name}  {exc}", flush=True)
+        if verbose and (saved % 2000 == 0 or i + 1 == n):
+            el = time.time() - t0
+            print(f"  [prepare] 剪裁图 {i + 1}/{n}  已写出 {saved}  {el:.0f}s"
+                  f" ({saved / max(el, 1e-9):.0f} 张/s)", flush=True)
+    if verbose:
+        print(f"  [prepare] 剪裁图完成：{out_dir}（{saved} 张 PNG，"
+              f"耗时 {time.time() - t0:.0f}s）", flush=True)
+    return saved
+
+
 def run_build(
     files: Sequence[Path],
     params: PrepParams,
     positions: Optional[Sequence[int]] = None,
     workers: int = 1,
     verbose: bool = True,
-) -> Tuple[np.ndarray, np.ndarray, List[dict], List[str], FilterStats]:
+    save_crops_dir: Optional[Path] = None,
+    save_crops_n: int = 0,
+) -> Tuple[np.ndarray, np.ndarray, List[dict], List[str], FilterStats, int]:
     """并行跑完整预处理管线。
 
     参数
@@ -174,16 +273,26 @@ def run_build(
         并行进程数；``1`` 表示串行（便于调试）。
     verbose : bool
         是否打印进度。
+    save_crops_dir : Path or None
+        非 None 时把剪裁后的图片写成 PNG 到该目录；``None`` 表示不写。
+    save_crops_n : int
+        写剪裁图的上限张数；``0`` 表示全部。
 
     返回
     ----
     tuple
-        ``(images (N,H,W) uint8, labels (N,6) int64, meta_list, source_list, stats)``。
-        三个列表与 ``images`` 逐行对应。
+        ``(images (N,H,W) uint8, labels (N,6) int64, meta_list, source_list, stats,
+        saved_crops)``。三个列表与 ``images`` 逐行对应；``saved_crops`` 为实际
+        写出的剪裁图张数（未开启落盘时为 0）。
 
     形状
     ----
     ``list[Path]`` -> ``(N, H, W) uint8`` + ``(N, 6) int64``
+
+    说明
+    ----
+    剪裁图落盘接在**排序之后**，因此文件名里的行号与缓存下标、``splits.npz``
+    下标严格一一对应；落盘只是旁路写文件，缓存内容不受影响。
     """
     stats = FilterStats()
     images: List[np.ndarray] = []
@@ -230,7 +339,7 @@ def run_build(
     if not images:
         h, w = params.input_size[1], params.input_size[0]
         return (np.zeros((0, h, w), dtype=np.uint8),
-                np.zeros((0, SEQ_LEN), dtype=np.int64), [], [], stats)
+                np.zeros((0, SEQ_LEN), dtype=np.int64), [], [], stats, 0)
 
     # ★ 可复现性修复：多进程时上面按"完成顺序"收集结果，顺序随运行时机而变，
     #    导致同一数据集两次跑出的缓存样本顺序不同（重建 24×96 缓存时实测
@@ -243,8 +352,20 @@ def run_build(
     metas = [metas[i] for i in order]
     sources = [sources[i] for i in order]
 
+    # 剪裁图落盘：必须在排序之后，文件名里的行号才等于缓存下标
+    saved_crops = 0
+    if save_crops_dir is not None:
+        saved_crops = save_crops(
+            np.stack(images, axis=0),
+            np.stack(labels, axis=0),
+            sources,
+            Path(save_crops_dir),
+            limit=int(save_crops_n),
+            verbose=True,
+        )
+
     return (np.stack(images, axis=0), np.stack(labels, axis=0),
-            metas, sources, stats)
+            metas, sources, stats, saved_crops)
 
 
 # =============================================================================
@@ -271,6 +392,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     help="并行进程数")
     ap.add_argument("--config", type=str, default=None, help="配置文件路径")
     ap.add_argument("--out-tag", type=str, default=None, help="缓存文件名标签，默认按输入尺寸")
+    ap.add_argument("--save-crops", nargs="?", const="", default=None, metavar="DIR",
+                    help="保存剪裁后的图片到 DIR（不带 DIR 时用 data/crops/<tag>/）；"
+                         "不加该参数时也会保存，等价于默认开启")
+    ap.add_argument("--no-save-crops", action="store_true",
+                    help="只写缓存，不保存剪裁图")
+    ap.add_argument("--save-crops-n", type=int, default=0,
+                    help="只保存前 N 张剪裁图（0 = 全部）")
     args = ap.parse_args(argv)
 
     cfg = load_config(args.config)
@@ -293,9 +421,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(f"     面积下限 {params.min_quad_area_px}  越界容差 {params.allow_out_of_bounds_px}")
     print(f"     并行进程 {args.workers}")
 
+    # 剪裁图落盘：默认开启（--no-save-crops 关闭；--save-crops DIR 改址）
+    save_crops_dir: Optional[Path] = None
+    if not args.no_save_crops:
+        tag_for_crops = args.out_tag or \
+            f"ccpd_{params.input_size[0]}x{params.input_size[1]}"
+        if args.save_crops:
+            save_crops_dir = Path(args.save_crops).expanduser().resolve()
+        else:
+            save_crops_dir = ROOT / "data" / "crops" / tag_for_crops
+        print(f"     剪裁图目录 {save_crops_dir}"
+              f"（{'全部' if args.save_crops_n <= 0 else f'前 {args.save_crops_n} 张'}）")
+    else:
+        print("     剪裁图目录 不保存（--no-save-crops）")
+
     t0 = time.time()
-    images, labels, metas, sources, stats = run_build(
-        files, params, workers=int(args.workers)
+    images, labels, metas, sources, stats, n_crops_saved = run_build(
+        files, params, workers=int(args.workers),
+        save_crops_dir=save_crops_dir, save_crops_n=int(args.save_crops_n),
     )
     elapsed = time.time() - t0
 
@@ -318,6 +461,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "elapsed_sec": round(elapsed, 1),
         "images_shape": list(images.shape),
         "labels_shape": list(labels.shape),
+        "saved_crops_dir": str(save_crops_dir) if save_crops_dir is not None else None,
+        "saved_crops_count": int(n_crops_saved),
     }
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -353,6 +498,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     for reason, info in summary["by_reason"].items():
         print(f"  {info['count']:6d}  {reason:18s} {info['desc']}")
     print(f"图像数组：{images.shape} {images.dtype}   标签数组：{labels.shape} {labels.dtype}")
+    if save_crops_dir is not None:
+        print(f"剪裁图：{save_crops_dir}（{n_crops_saved} 张 PNG，"
+              f"文件名 = 行号_车牌文本_来源文件名.png）")
     print("=" * 72)
     print()
     print("下一步（人工核对必须先做）：")

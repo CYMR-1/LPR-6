@@ -29,6 +29,10 @@ data/synth_test_preview/
 # 预处理缓存 .npy / .npz（可由预处理脚本重建）
 data/processed/
 
+# 剪裁后的图片 PNG（是缓存的逐张可视化副本，可由预处理脚本重建，体积大）
+data/crops/
+data/**/crops/
+
 # 下载压缩包临时目录（可达数 GB，绝不入库）
 data/raw_dl/
 
@@ -37,8 +41,9 @@ data/manifest.csv
 data/manifest_synth.csv
 data/manifest_hard.csv
 
-# 模型权重与图表不入库（图表可由日志重绘，权重可由脚本重训）
-reports/checkpoints/
+# 模型权重与图表：最终交付权重入库，其余（临时/冒烟/中间轮次）不入库
+reports/checkpoints/*
+!reports/checkpoints/final_s*
 reports/figs/
 
 # 后台任务的运行日志（过程性输出，不是结论证据）

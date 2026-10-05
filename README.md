@@ -95,7 +95,7 @@ projectX/
 │  └─ visualize.py                # 人工核对网格、曲线、混淆矩阵、错误样本
 └─ reports/
    ├─ configs/                    # ★ 最终模型的部署配置（入库）
-   ├─ checkpoints/                # ★ 最终模型权重（不入库，见 §1）
+   ├─ checkpoints/                # ★ 最终模型权重 final_s{42,43,44}_best.npz（入库）
    └─ logs/                       # 最终模型的逐 epoch 指标与独立评测产物（入库）
 ```
 
@@ -208,8 +208,17 @@ data/ccpd/
 ### 4.2 一键数据准备
 
 ```bash
-# 数据准备：解析 + 透视矫正裁剪 + 过滤统计（写出 data/processed/ccpd_<W>x<H>.npz）
+# 数据准备：解析 + 透视矫正裁剪 + 过滤统计
+#   写出 data/processed/ccpd_<W>x<H>.npz（缓存）
+#   同时把裁剪后的图片逐张写成 PNG 到 data/crops/<tag>/（默认开启，可肉眼核对）
 python train/prepare_data.py
+
+# 只想重建缓存、不要 2.8 万张 PNG 时：
+python train/prepare_data.py --no-save-crops
+
+# 剪裁图改写到别的目录，或只存前 500 张：
+python train/prepare_data.py --save-crops D:/crops_dump
+python train/prepare_data.py --save-crops-n 500
 
 # ★ 人工核对（必做，通过前不得进入训练）
 #   产出 20 张「裁剪图 + 标签字符串」网格图，确认裁剪区域与标签逐位对应
@@ -219,6 +228,10 @@ python evaluate/visualize.py check-grid
 python train/split_dataset.py
 ```
 
+* 剪裁图文件名为 `<缓存行号>_<车牌文本>_<来源文件名>.png`，
+  行号与 `data/processed/ccpd_<W>x<H>.npz` 的行、以及 `splits.npz` 里的下标
+  **严格一一对应**，可逐张对照标签；剪裁图本质是缓存内容的可视化副本，
+  因此不入库（在 `data/crops/` 下，已被 `.gitignore` 排除）。
 * 划分严格按**车牌号码去重**：同一号码的全部图片归入同一集合，且
   train/val/test/hard 两两交集为 0、合成域与真实域无重叠（`split_summary.json`
   记录全部交集计数）。
@@ -337,8 +350,11 @@ python predict.py a.jpg b.jpg --json --save-debug reports/figs/_debug
 * **`configs/default.yaml` 的增强档位（`weak`）是针对本架构调过的默认值**，但
   **不是最终模型口径**：MLP 无平移不变性，几何增强（旋转/缩放/平移）在本架构上
   产生负效果，最终模型使用 `reports/configs/final_s*.yaml`（`baseline_level: none`）。
-* **`reports/checkpoints/` 与 `reports/figs/` 不入库**（体积大或可由脚本重建），
-  `reports/logs/` 与 `reports/configs/` 入库（体积小、是结论的直接证据）。
+* **`reports/checkpoints/` 只入库最终权重** `final_s{42,43,44}_best.npz`
+  （3 个文件共约 12 MB，是"最终训练好的模型"本体，不可由脚本重建）；
+  其余权重（冒烟 / 临时 / 中间轮次）仍不入库。`reports/figs/` 不入库
+  （可由日志重绘），`reports/logs/` 与 `reports/configs/` 入库
+  （体积小、是结论的直接证据）。
 
 ---
 
