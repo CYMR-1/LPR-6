@@ -63,7 +63,7 @@ from models.charset import decode_label, index_to_char  # noqa: E402
 from models.config import load_config, resolve_path  # noqa: E402
 from models.model import Params, forward, predict  # noqa: E402
 
-# 默认识别用检查点：最终交付模型 final_s42（同分布测试字符 98.28% / 整牌 91.35%，
+# 默认识别用检查点：最终交付模型 final_s42（同分布测试字符 98.40% / 整牌 91.90%，
 # 3 个种子中最常用的默认；另两个种子为 final_s43 / final_s44）。
 DEFAULT_RUN = "final_s42"
 

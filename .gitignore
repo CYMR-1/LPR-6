@@ -70,3 +70,6 @@ _ref/
 .idea/
 Thumbs.db
 desktop.ini
+
+# 提交信息临时文件（绝不入库）
+.gitmsg*.txt

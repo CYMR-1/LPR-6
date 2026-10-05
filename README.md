@@ -1,23 +1,16 @@
 # ProjectX（交付版）· 共享 MLP 与位置分类头的车牌后六位字符识别
 
-输入**已裁剪、已对齐**的 32×128 灰度车牌图，输出汉字之后**六个字符位置**各自的
-类别预测（每位 34 类：数字 0–9 + 大写字母 A–Z 去掉易混的 I、O）。
+输入**已裁剪、已对齐**的 32×128 灰度车牌图，输出汉字之后**六个字符位置**各自的类别预测（每位 34 类：数字 0–9 + 大写字母 A–Z 去掉易混的 I、O）。
 
-> **本项目使用 NumPy 手写前向与反向传播**，不使用 `torch.autograd`、TensorFlow、
-> Keras 等任何自动求导机制；可选 CuPy 作为 GPU 后端，仅加速矩阵运算。
+> **本项目使用 NumPy 手写前向与反向传播**，不使用 `torch.autograd`、TensorFlow、Keras 等任何自动求导机制；可选 CuPy 作为 GPU 后端，仅加速矩阵运算。
 
-本仓库只保留**最终训练好的模型**与产生它的最小可复现管线（数据准备 → 训练 →
-评测 → 推理）。开发过程中的全部对照实验代码、运行日志、汇总表、图表与实验报告
-均已从本分支移除，`configs/default.yaml` 是超参数的唯一来源。
+本仓库只保留**最终训练好的模型**与产生它的最小可复现管线（数据准备 → 训练 → 评测 → 推理）。开发过程中的全部对照实验代码、运行日志、汇总表、图表与实验报告均已从本分支移除，`configs/default.yaml` 是超参数的唯一来源。
 
 ---
 
 ## 1. 最终模型
 
-最终模型 = **共享六头 MLP + sigmoid + 交叉熵 + SGD(μ=0.9, lr=0.05, bs=64) +
-关闭数据增强**。关闭增强是本架构的关键：MLP 没有平移不变性，几何增强会把字符
-挪到训练时没见过的像素位置，等于注入噪声（`configs/default.yaml` 里默认档位仍是
-`weak`，因此**复现最终模型必须用 `reports/configs/final_s*.yaml`**）。
+最终模型 = **共享六头 MLP + sigmoid + 交叉熵 + SGD(μ=0.9, lr=0.05, bs=64) + 关闭数据增强**。关闭增强是本架构的关键：MLP 没有平移不变性，几何增强会把字符挪到训练时没见过的像素位置，等于注入噪声（`configs/default.yaml` 里默认档位仍是`weak`，因此**复现最终模型必须用 `reports/configs/final_s*.yaml`**）。
 
 三个随机种子的检查点与实测指标（数字取自 `reports/logs/final_s*_run.json`）：
 
@@ -27,24 +20,11 @@
 | `final_s43_best.npz` | 98.56% | **98.33%** | 91.85% | 73.03% | 34.85% | 43.65% | 78 / 80 |
 | `final_s44_best.npz` | 98.55% | **98.42%** | 91.90% | 72.77% | 34.65% | 45.64% | 80 / 80 |
 
-* `test` = CCPD-Base 同分布测试集（2000 张）；`hard` = 强扰动测试集（2000 张）；
-  `synth` = 外部生成器合成域测试集（2000 张）。
-* 模型结构：`shared` / `sigmoid` / `hidden_dim=256` / 头维度 `[34]*6`，
-  **参数量 1,101,260**，输出节点 204。
-* 独立评测（`python evaluate/main.py --run final_s42`，载入检查点、**不重训**）复现出
-  上表**逐位一致**的指标（val 98.42% / 91.95%，test 98.40% / 91.90%，
-  hard 73.17% / 34.40%，synth 45.52% / 0.80%）；CPU 单张前向 **0.20–0.28 ms**
-  （50 张中位数，含标准化与六头 softmax，实测随机器负载波动）。
-* 上表是**从原始 CCPD 图重跑一次**得到的结果（先 `prepare_data.py` +
-  `split_dataset.py` 重建缓存与划分，再按 `reports/configs/final_s*.yaml`
-  训练三个种子；划分与标准化统计量每次重建都逐位一致：train/val/test/hard/synth
-  = 9000/2000/2000/2000/2000、mean=0.421204、std=0.221177、n=9000）。
-  `reports/logs/final_s*_eval.json` 记录的是这一轮训练时的原始评测（GPU/cupy 后端），
-  其 `commit` / `backend` 字段是当时的冻结值。
-* 训练环境：Python 3.13 + numpy + cupy-cuda12x（RTX 4060 Laptop，8 GB）；
-  单次训练约 146–183 秒（早停或跑满 80 轮），三个种子合计约 9 分钟。
-* 复现最终模型必须使用 `reports/configs/final_s*.yaml`：它与
-  `configs/default.yaml` 的唯一实质差别是 `augmentation.baseline_level: none`
+* `test` = CCPD-Base 同分布测试集（2000 张）；`hard` = 强扰动测试集（2000 张）；`synth` = 外部生成器合成域测试集（2000 张）。
+* 模型结构：`shared` / `sigmoid` / `hidden_dim=256` / 头维度 `[34]*6`，**参数量 1,101,260**，输出节点 204。
+* 独立评测（`python evaluate/main.py --run final_s42`，载入检查点、**不重训**）复现出上表**逐位一致**的指标（val 98.42% / 91.95%，test 98.40% / 91.90%，hard 73.17% / 34.40%，synth 45.52% / 0.80%）；CPU 单张前向 **0.20–0.28 ms**（50 张中位数，含标准化与六头 softmax，实测随机器负载波动）。
+* 训练环境：Python 3.13 + numpy + cupy-cuda12x（RTX 4060 Laptop，8 GB）；单次训练约 146–183 秒（早停或跑满 80 轮），三个种子合计约 9 分钟。
+* 复现最终模型必须使用 `reports/configs/final_s*.yaml`：它与 `configs/default.yaml` 的唯一实质差别是 `augmentation.baseline_level: none`
   （默认配置是 `weak`），用默认配置训练会得到完全不同的结果。
 
 > ⚠️ **域差距提醒**：模型训练于 CCPD 风格的真实车牌特写，对风格差异大的输入会
@@ -107,7 +87,7 @@ projectX/
 
 ## 3. 环境准备
 
-需要 Python ≥ 3.10（本项目在 Python 3.12.14 上开发验证）。
+需要 Python ≥ 3.10（本项目本轮在 Python 3.13.12 上训练与评测验证）。
 
 ```bash
 python -m venv .venv
