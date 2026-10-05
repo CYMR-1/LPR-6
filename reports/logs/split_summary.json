@@ -3,21 +3,18 @@
     "train": 9000,
     "val": 2000,
     "test": 2000,
-    "hard": 2000
+    "hard_test": 2000,
+    "synth_test": 2000
   },
   "unique_plates": {
     "train": 8684,
     "val": 1921,
-    "test": 1924,
-    "hard": 1994
+    "test": 1924
   },
   "intersections": {
-    "train∩val": 0,
-    "train∩test": 0,
-    "train∩hard": 0,
-    "val∩test": 0,
-    "val∩hard": 0,
-    "test∩hard": 0
+    "test∩train": 0,
+    "test∩val": 0,
+    "train∩val": 0
   },
   "hard_overlap_with_base": 0,
   "synth_overlap_with_real": 0,
@@ -29,12 +26,6 @@
   },
   "split_seed": 42,
   "preprocess_version": "prep-v1.0.0",
-  "input_size": [
-    128,
-    32
-  ],
-  "note": "合成域与强扰动集不参与任何调参决策（§2.5 要求 3）；本文件从冻结的 splits.npz 只读重建；合成域使用 generator_repo 后端（Nenger/chinese_licence_plate_generator @43bac43），hard 集为历史口径不变",
-  "restored_from_frozen_split": true,
   "synth_config": {
     "backend": "generator_repo",
     "generator_repo": "https://github.com/Nenger/chinese_licence_plate_generator",
@@ -53,5 +44,6 @@
       "jittering_scale"
     ],
     "io_rejection": true
-  }
+  },
+  "note": "合成域与强扰动集不参与任何调参决策（§2.5 要求 3）"
 }

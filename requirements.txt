@@ -10,7 +10,8 @@ PyYAML>=6.0
 # --- 可选：GPU 训练后端（CuPy，numpy 的 GPU 兼容替代）---
 # 反向传播仍为手写，仅矩阵运算在 GPU 上执行，不违反"禁止自动求导"约束。
 # 请按本机 CUDA 版本选择对应包；无 GPU 时保持注释即可，程序会自动回退 numpy 纯 CPU。
-# cupy-cuda12x
+cupy-cuda12x
+cupy-cuda12x[ctk]
 
 # --- 仅数据生成环节使用：外部合成车牌生成器（Nenger/chinese_licence_plate_generator）---
 # 模型、训练、评测与 CCPD 预处理管线均不依赖 OpenCV；只有用

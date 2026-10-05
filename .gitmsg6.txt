@@ -1,0 +1,42 @@
+chore: 删除全部训练缓存并从原始数据重训（GPU，三seed）
+
+按要求删除全部训练缓存后从 data/ccpd 原始 30000 张重跑完整管线，重训三个最终
+种子，并同步更新 README 中被新结果取代的数字。
+
+## 删除（不可由脚本重建的旧产物一并清除，全部可由本轮重跑重建）
+- 缓存：data/processed/（12 文件 390 MB）、data/crops/（28341 张）、
+  data/synth_test/、data/synth_test_preview/、data/manifest.csv
+- 旧权重：reports/checkpoints/final_s{42,43,44}_best.npz
+- 旧指标：reports/logs/final_s*_{run.json,history.csv,per_position.csv}、
+  final_s42_eval*、split_summary.json
+（reports/logs/ 下的 grad_check_*、overfit_check、backend_parity 保留：它们与本次
+ 重训无关、可复现，且 README 明确称其为入库的结论证据。）
+
+## 重建（口径与改造前逐位一致）
+- prepare_data（全量 30000）：保留 28341，丢弃 1659（field_count 480、
+  green_plate 1179）；同时写出 28341 张剪裁图 PNG（17s）
+- split_dataset：train/val/test/hard/synth = 9000/2000/2000/2000/2000，
+  唯一号码 8684/1921/1924，两两交集全 0；
+  标准化统计量 mean=0.4212035465296757 std=0.22117652221407877 n=9000
+  —— 与本轮改造前的记录**逐位相同**，说明缓存与划分口径未被改动
+
+## 重训（GPU，cupy-cuda12x 14.2.0 / RTX 4060 Laptop 8 GB）
+- final_s42：65 轮（最佳 57），146 s；val 98.42% / test 98.40%+91.90% /
+  hard 73.17%+34.40% / synth 45.52%+0.80%
+- final_s43：80 轮（最佳 78），180 s；val 98.56% / test 98.33%+91.85% /
+  hard 73.03%+34.85% / synth 43.65%+0.45%
+- final_s44：80 轮（最佳 80），181 s；val 98.55% / test 98.42%+91.90% /
+  hard 72.77%+34.65% / synth 45.64%+0.45%
+- 评测（载入检查点，不重训）逐位复现上表；后端 cupy，CPU 单张 0.206–0.223 ms
+- 新增 final_s{43,44}_eval*.{json,npz,csv} 与 errors.npz，使三个种子的评测产物
+  齐备（此前只有 s42 有完整评测产物）
+
+## README 同步
+- 指标表、域差距提醒、推理默认指标全部改为本轮实测值
+- 删除"改名后与训练时产物逐字节一致"这一已失效的溯源说明，改为说明本轮
+  重跑的来源与划分/标准化一致性
+- 训练环境更正为 Python 3.13 + cupy-cuda12x
+
+## 说明
+requirements.txt 把 cupy-cuda12x / cupy-cuda12x[ctk] 从注释改为生效，以匹配本轮
+实际使用的 GPU 环境（该编辑不是由本仓库任何脚本产生）。
