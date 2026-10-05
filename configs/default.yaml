@@ -72,7 +72,7 @@ ccpd:
     green: "ccpd_green"                  # 8 位新能源牌，必须跳过（§2.4 只保留 7 位）
     db: "ccpd_db"                        # 模糊子集：当前不参与任何划分（既非 base 也非强扰动）
     np: "ccpd_np"                        # 无角点标注（文件名缺四角点），丢弃
-  # 下面的键由 train/phase15_split.py::resolve_subset_tokens 实际读取
+  # 下面的键由 train/split_dataset.py::resolve_subset_tokens 实际读取
   train_subset: "base"
   # 强扰动测试集来源子集（§2.5）
   hard_subset_names: ["blur", "challenge", "rotate", "tilt", "weather", "fn"]
@@ -254,7 +254,7 @@ train:
   # 设为正数时，超预算的运行会提前结束并在 *_run.json 里写入
   # budget_exhausted=true 与实际轮次，绝不把"没跑满"伪装成跑满。
   time_budget_seconds: null
-  # 小样本过拟合自检（P2/P3 验收，§5.4）
+  # 小样本过拟合自检（§5.4）
   #
   # ★ 实测结论（本机 sigmoid + 6 路 Softmax，100 样本，已逐一试过 lr∈{0.3..4}、
   #   momentum∈{0,0.9}、lr 退火、mu 退火、两者联合退火）：

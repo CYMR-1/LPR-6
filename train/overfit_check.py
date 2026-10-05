@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""小样本过拟合自检（§5.4 第 2 项，P3 验收门槛）。
+"""小样本过拟合自检（§5.4 第 2 项，自检门槛）。
 
 为什么必须做
 ------------
@@ -53,6 +53,12 @@ import sys as _sys
 
 if __package__ in (None, ""):
     _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    # 直接运行 train/ 下脚本时 sys.path[0] 是 train/，那里的 train.py 会以顶层
+    # 模块身份遮蔽同名 train 包，导致 `from train.xxx import ...` 失败，因此把
+    # 脚本自身目录从 sys.path 中移除（项目根已插到最前，models/evaluate 仍可导入）。
+    _here = str(Path(__file__).resolve().parent)
+    while _here in _sys.path:
+        _sys.path.remove(_here)
 
 from models.backend import get_backend
 from models.charset import SEQ_LEN, resolve_positions
@@ -277,7 +283,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     int
         通过返回 0。
     """
-    ap = argparse.ArgumentParser(description="P3 验收：小样本过拟合自检（§5.4）")
+    ap = argparse.ArgumentParser(description="自检：小样本过拟合自检（§5.4）")
     ap.add_argument("--config", type=str, default=None)
     ap.add_argument("--n-samples", type=int, default=None)
     ap.add_argument("--epochs", type=int, default=None)
@@ -301,7 +307,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"[overfit] 已覆盖 model.activation = {args.activation}")
     ensure_dirs(cfg)
     print("=" * 74)
-    print("P3 小样本过拟合自检（§5.4 第 2 项）")
+    print("小样本过拟合自检（§5.4 第 2 项）")
     print(f"  目标：训练损失 < {float(cfg.train.overfit_check.target_loss):.1e} "
           f"且 字符准确率 == {float(cfg.train.overfit_check.target_char_acc):.2f}")
     print("=" * 74)

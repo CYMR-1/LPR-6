@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""训练主程序（§4 训练细节 / §5.4 P4 验收）。
+"""训练主程序（§4 训练细节 / §5.4 自检）。
 
 实现要点
 --------
@@ -37,6 +37,12 @@ import sys as _sys
 
 if __package__ in (None, ""):
     _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    # 直接运行 train/ 下脚本时 sys.path[0] 是 train/，那里的 train.py 会以顶层
+    # 模块身份遮蔽同名 train 包，导致 `from train.xxx import ...` 失败，因此把
+    # 脚本自身目录从 sys.path 中移除（项目根已插到最前，models/evaluate 仍可导入）。
+    _here = str(Path(__file__).resolve().parent)
+    while _here in _sys.path:
+        _sys.path.remove(_here)
 
 from evaluate.model_eval import evaluate_dataset
 from models.augment import AugmentConfig, build_augment_fn
@@ -316,12 +322,12 @@ def load_data_bundle(
     # 对应分辨率下重建，因此划分文件必须与 ccpd.input_size 配套。
     split_path = processed / str(cfg.get("paths.splits_file", "splits.npz"))
     if not cache.exists():
-        raise FileNotFoundError(f"缺少预处理缓存 {cache}，请先运行 train/phase1_prepare.py")
+        raise FileNotFoundError(f"缺少预处理缓存 {cache}，请先运行 train/prepare_data.py")
     if not split_path.exists():
-        raise FileNotFoundError(f"缺少划分文件 {split_path}，请先运行 train/phase15_split.py")
+        raise FileNotFoundError(f"缺少划分文件 {split_path}，请先运行 train/split_dataset.py")
 
     images, labels, _ = load_cache(cache)
-    # ★ 响亮防线（code_audit 缺陷 #3）：缓存标签一旦越界（<0 或 >=34），
+    # ★ 响亮防线：缓存标签一旦越界（<0 或 >=34），
     # build_onehot 只会把越界位置的 one-hot 静默置零、不报错，梯度被
     # 悄悄改变。数据入口（解析/编码）已有检查，这里补上"缓存→训练"的缺口。
     n_bad = int(((labels < 0) | (labels >= NUM_CLASSES)).sum())
@@ -330,7 +336,7 @@ def load_data_bundle(
         raise ValueError(
             f"缓存 {cache.name} 中有 {n_bad} 个越界标签（合法范围 0..{NUM_CLASSES - 1}），"
             f"前 5 个位置（样本, 字符位）：{bad.tolist()}。"
-            f"缓存已损坏，请重新运行 train/phase1_prepare.py")
+            f"缓存已损坏，请重新运行 train/prepare_data.py")
     with np.load(split_path, allow_pickle=False) as d:
         tr = d["train"].astype(np.int64)
         va = d["val"].astype(np.int64)
@@ -411,7 +417,7 @@ class Trainer:
         self._use_head_mask = (int(self.head_dims[0]) <= LETTER_MAX_INDEX + 1)
 
         # 监控指标的方向：名字含 "acc" 的指标越大越好，其余（loss）越小越好。
-        # ★ 缺陷修复（code_audit #2）：此前两处比较都硬编码"越小越好"，
+        # ★ 缺陷修复：此前两处比较都硬编码"越小越好"，
         #   一旦把 monitor 配成 val_char_acc，best 选择/早停/回滚会整体反向
         #   （实测：acc 单调上升却把 acc 最低轮标为 best 并回滚到最差权重）。
         self._monitor_maximize = ("acc" in str(tcfg.monitor))

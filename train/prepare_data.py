@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""P1 阶段：CCPD 全量解析、透视矫正裁剪、过滤统计与预处理缓存。
+"""数据准备：CCPD 全量解析、透视矫正裁剪、过滤统计与预处理缓存。
 
 产出
 ----
@@ -7,8 +7,8 @@
 * ``data/manifest.csv``               —— 每张图可追溯的来源记录（§2.5 要求 2）
 * ``reports/logs/prepare_stats.json`` —— 过滤统计（各类丢弃原因计数）
 
-验收（§9 P1）
--------------
+自检（§9）
+----------
 1. 字符集断言 = 34（由 ``models.charset`` 在导入时完成）；
 2. 抽样 20 张人工核对通过（由 ``evaluate/visualize.py check-grid`` 产出网格图）；
 3. 过滤规则生效且丢弃统计已记录。
@@ -17,9 +17,9 @@
 ----
 ::
 
-    python train/phase1_prepare.py                 # 全量
-    python train/phase1_prepare.py --limit 2000    # 只处理前 2000 张（快速验证）
-    python train/phase1_prepare.py --workers 8     # 指定并行进程数
+    python train/prepare_data.py                 # 全量
+    python train/prepare_data.py --limit 2000    # 只处理前 2000 张（快速验证）
+    python train/prepare_data.py --workers 8     # 指定并行进程数
 """
 
 from __future__ import annotations
@@ -39,6 +39,12 @@ import sys as _sys
 
 if __package__ in (None, ""):
     _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    # 直接运行 train/ 下脚本时 sys.path[0] 是 train/，那里的 train.py 会以顶层
+    # 模块身份遮蔽同名 train 包，导致 `from train.xxx import ...` 失败，因此把
+    # 脚本自身目录从 sys.path 中移除（项目根已插到最前，models/evaluate 仍可导入）。
+    _here = str(Path(__file__).resolve().parent)
+    while _here in _sys.path:
+        _sys.path.remove(_here)
 
 from models.ccpd_parse import (
     CcpdRecord,
@@ -247,7 +253,7 @@ def run_build(
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    """P1 主入口。
+    """数据准备主入口。
 
     参数
     ----
@@ -259,7 +265,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     int
         进程退出码。
     """
-    ap = argparse.ArgumentParser(description="P1：CCPD 解析、裁剪、过滤统计与缓存")
+    ap = argparse.ArgumentParser(description="数据准备：CCPD 解析、裁剪、过滤统计与缓存")
     ap.add_argument("--limit", type=int, default=0, help="只处理前 N 张（0 = 全部）")
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 4) - 1),
                     help="并行进程数")
@@ -276,12 +282,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     files = discover_images(ccpd_root)
     if not files:
-        print(f"[P1] 错误：{ccpd_root} 下没有找到图片")
+        print(f"[prepare] 错误：{ccpd_root} 下没有找到图片")
         return 2
     if args.limit and args.limit > 0:
         files = files[: args.limit]
 
-    print(f"[P1] 发现 {len(files)} 张图片，预处理参数：")
+    print(f"[prepare] 发现 {len(files)} 张图片，预处理参数：")
     print(f"     矫正尺寸 {params.rectify_size}  输入尺寸 {params.input_size}  "
           f"裁剪起始列 {params.crop_x0}  保留比例 {params.keep_right_fraction:.6f}")
     print(f"     面积下限 {params.min_quad_area_px}  越界容差 {params.allow_out_of_bounds_px}")
@@ -324,7 +330,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         records=np.asarray([json.dumps(m, ensure_ascii=False) for m in metas], dtype=object)
         if metas else np.asarray([], dtype=object),
     )
-    print(f"[P1] 缓存已写出：{cache_path}  ({cache_path.stat().st_size / 1024 ** 2:.1f} MB)")
+    print(f"[prepare] 缓存已写出：{cache_path}  ({cache_path.stat().st_size / 1024 ** 2:.1f} MB)")
 
     # 过滤统计落盘
     log_path = resolve_path(cfg, "logs_dir") / "prepare_stats.json"
@@ -335,12 +341,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, "w", encoding="utf-8") as fp:
         json.dump(meta_blob, fp, ensure_ascii=False, indent=2)
-    print(f"[P1] 过滤统计已写出：{log_path}")
+    print(f"[prepare] 过滤统计已写出：{log_path}")
 
     # ---- 控制台摘要 -------------------------------------------------------
     print()
     print("=" * 72)
-    print(f"P1 预处理完成：扫描 {summary['total_scanned']} 张，"
+    print(f"数据准备完成：扫描 {summary['total_scanned']} 张，"
           f"保留 {summary['kept']}，丢弃 {summary['dropped_total']} "
           f"（丢弃率 {summary['drop_rate'] * 100:.2f}%），耗时 {elapsed:.0f}s")
     print("丢弃原因明细：")
@@ -349,9 +355,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     print(f"图像数组：{images.shape} {images.dtype}   标签数组：{labels.shape} {labels.dtype}")
     print("=" * 72)
     print()
-    print("下一步（P1 验收必须先做）：")
+    print("下一步（人工核对必须先做）：")
     print("  python evaluate/visualize.py check-grid     # 抽样 20 张人工核对")
-    print("  核对通过后再执行： python train/phase15_split.py")
+    print("  核对通过后再执行： python train/split_dataset.py")
     return 0
 
 

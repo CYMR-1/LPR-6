@@ -48,6 +48,12 @@ import sys as _sys
 
 if __package__ in (None, ""):
     _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    # 直接运行 train/ 下脚本时 sys.path[0] 是 train/，那里的 train.py 会以顶层
+    # 模块身份遮蔽同名 train 包，导致 `from train.xxx import ...` 失败，因此把
+    # 脚本自身目录从 sys.path 中移除（项目根已插到最前，models/evaluate 仍可导入）。
+    _here = str(Path(__file__).resolve().parent)
+    while _here in _sys.path:
+        _sys.path.remove(_here)
 
 from models.ccpd_parse import PrepParams
 from models.charset import (

@@ -81,8 +81,8 @@ projectX/
 │  ├─ metrics.py                  # 评价指标（字符 / 整牌准确率等）
 │  └─ optim.py                    # SGD、动量、批量策略
 ├─ train/
-│  ├─ phase1_prepare.py           # P1：CCPD 解析 + 裁剪 + 过滤统计（生成 .npz 缓存）
-│  ├─ phase15_split.py            # P1.5：号码去重划分 + 合成测试集生成（按 synth.backend 分发）
+│  ├─ prepare_data.py             # 数据准备：CCPD 解析 + 裁剪 + 过滤统计（生成 .npz 缓存）
+│  ├─ split_dataset.py            # 数据划分：号码去重划分 + 合成测试集生成（按 synth.backend 分发）
 │  ├─ synth_from_generator.py     # ★ 合成域后端 generator_repo：外部生成器牌面级输出 + 同口径几何
 │  ├─ synth_plates.py             # 合成域后端 pil_renderer（内置 PIL 渲染器，保留可切回）
 │  ├─ train.py                    # 训练循环、早停、日志落盘
@@ -180,7 +180,7 @@ data/ccpd/
 * 图片发现用 `models/dataset.py::discover_images` 的 **`rglob` 递归扫描**，
   因此**也允许**用子目录组织；但无论放哪，**文件名里必须带
   `_ccpd_<subset>_` token**，否则该图会被判为"无子集"而在划分时被忽略
-  （`phase15_split.py` 会因找不到 `ccpd_base` 样本而报错退出）。
+  （`split_dataset.py` 会因找不到 `ccpd_base` 样本而报错退出）。
 
 `zenitsu09/ccpd-subset-30k` 实测子集分布（扫描 30000 张所得）：
 
@@ -208,15 +208,15 @@ data/ccpd/
 ### 4.2 一键数据准备
 
 ```bash
-# P1：解析 + 透视矫正裁剪 + 过滤统计（写出 data/processed/ccpd_<W>x<H>.npz）
-python train/phase1_prepare.py
+# 数据准备：解析 + 透视矫正裁剪 + 过滤统计（写出 data/processed/ccpd_<W>x<H>.npz）
+python train/prepare_data.py
 
 # ★ 人工核对（必做，通过前不得进入训练）
 #   产出 20 张「裁剪图 + 标签字符串」网格图，确认裁剪区域与标签逐位对应
 python evaluate/visualize.py check-grid
 
-# P1.5：号码去重划分 + 生成合成域测试集（按 configs 的 synth.backend 选择后端）
-python train/phase15_split.py
+# 数据划分：号码去重划分 + 生成合成域测试集（按 configs 的 synth.backend 选择后端）
+python train/split_dataset.py
 ```
 
 * 划分严格按**车牌号码去重**：同一号码的全部图片归入同一集合，且
@@ -226,7 +226,8 @@ python train/phase15_split.py
   验证 / 测试 / 强扰动 / 合成域一律复用，不得各自重新拟合。
 * 合成域生成器可单独预览：`python train/synth_from_generator.py --n 40`，
   会打印生成器 commit / 种子 / 扰动链并输出人工核对网格。
-* 预处理缓存由 P1 写出、划分文件由 P1.5 写出；`train/train.py` 只读取这两个文件，
+* 预处理缓存由 `prepare_data.py` 写出、划分文件由 `split_dataset.py` 写出；
+  `train/train.py` 只读取这两个文件，
   缺失时报错并提示先跑对应步骤，**不会**自动重建（避免口径被无意改变）。
 
 ---

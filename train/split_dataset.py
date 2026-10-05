@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""P1.5 阶段：号码去重划分 + 合成域测试集 + 强扰动测试集 + manifest.csv。
+"""数据划分：号码去重划分 + 合成域测试集 + 强扰动测试集 + manifest.csv。
 
 本模块落地 **§2.5 号码去重协议**，该协议优先于任何"按图像随机划分"的方案：
 
@@ -45,6 +45,12 @@ import sys as _sys
 
 if __package__ in (None, ""):
     _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    # 直接运行 train/ 下脚本时 sys.path[0] 是 train/，那里的 train.py 会以顶层
+    # 模块身份遮蔽同名 train 包，导致 `from train.xxx import ...` 失败，因此把
+    # 脚本自身目录从 sys.path 中移除（项目根已插到最前，models/evaluate 仍可导入）。
+    _here = str(Path(__file__).resolve().parent)
+    while _here in _sys.path:
+        _sys.path.remove(_here)
 
 from models.ccpd_parse import PrepParams
 from models.charset import SEQ_LEN, decode_batch
@@ -346,7 +352,7 @@ def resolve_subset_tokens(cfg) -> tuple:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    """P1.5 主入口。
+    """数据划分主入口。
 
     参数
     ----
@@ -358,7 +364,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     int
         退出码。
     """
-    ap = argparse.ArgumentParser(description="P1.5：号码去重划分 + 合成域 + 强扰动")
+    ap = argparse.ArgumentParser(description="数据划分：号码去重划分 + 合成域 + 强扰动")
     ap.add_argument("--config", type=str, default=None)
     ap.add_argument("--force", action="store_true", help="覆盖已存在的划分产物")
     ap.add_argument("--out-name", type=str, default="splits.npz",
@@ -376,12 +382,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     tag = f"ccpd_{params.input_size[0]}x{params.input_size[1]}"
     cache_path = processed / f"{tag}.npz"
     if not cache_path.exists():
-        print(f"[P1.5] 错误：找不到预处理缓存 {cache_path}")
-        print("       请先运行： python train/phase1_prepare.py")
+        print(f"[split] 错误：找不到预处理缓存 {cache_path}")
+        print("       请先运行： python train/prepare_data.py")
         return 2
 
     images, labels, sources, records = _load_npz(cache_path)
-    print(f"[P1.5] 载入缓存 {cache_path}: images{images.shape} labels{labels.shape}")
+    print(f"[split] 载入缓存 {cache_path}: images{images.shape} labels{labels.shape}")
 
     # ---- ① 按子集拆分 base 与 hard ---------------------------------------
     # 子集名来自文件名 token（不是目录名）；口径由 ccpd.subsets /
@@ -392,11 +398,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     hard_mask = np.isin(subsets, hard_tokens)
     base_idx = np.flatnonzero(base_mask)
     hard_idx_all = np.flatnonzero(hard_mask)
-    print(f"[P1.5] base({base_token}) 样本 {len(base_idx)}，"
+    print(f"[split] base({base_token}) 样本 {len(base_idx)}，"
           f"强扰动候选 {len(hard_idx_all)}（{', '.join(hard_tokens)}）")
 
     if len(base_idx) == 0:
-        print(f"[P1.5] 错误：没有 {base_token} 样本")
+        print(f"[split] 错误：没有 {base_token} 样本")
         return 2
 
     # ---- ② 号码去重划分 ---------------------------------------------------
@@ -433,7 +439,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         hard_idx = np.sort(rng.choice(hard_candidates, size=hard_size, replace=False))
     else:
         hard_idx = hard_candidates
-    print(f"[P1.5] 强扰动测试集 {len(hard_idx)} 张"
+    print(f"[split] 强扰动测试集 {len(hard_idx)} 张"
           f"（候选 {len(hard_candidates)}，已排除与 base 号码重叠者）")
 
     # ---- ④ 合成域测试集 ---------------------------------------------------
@@ -443,7 +449,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     scfg = SynthConfig.from_config(cfg)
     synth_backend = str(cfg.synth.get("backend", "pil_renderer"))
     synth_size = int(cfg.split.synth_test_size)
-    print(f"[P1.5] 生成合成域测试集 {synth_size} 张"
+    print(f"[split] 生成合成域测试集 {synth_size} 张"
           f"（后端 {synth_backend}，种子 {scfg.seed}）…")
     if synth_backend == "generator_repo":
         from train.synth_from_generator import (
@@ -462,21 +468,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         synth_prov = {"backend": "pil_renderer", **scfg.as_dict()}
     else:
-        print(f"[P1.5] 错误：未知 synth.backend={synth_backend!r}"
+        print(f"[split] 错误：未知 synth.backend={synth_backend!r}"
               "（可选 pil_renderer / generator_repo）")
         return 2
-    print(f"[P1.5] 合成域：images{synth.images.shape} labels{synth.labels.shape}")
+    print(f"[split] 合成域：images{synth.images.shape} labels{synth.labels.shape}")
 
     # ---- ⑤ 全局标准化统计量：**只用训练集**（§2.3.2） --------------------
     train_images = images[train_idx].astype(np.float32) / 255.0
     standardizer = GlobalStandardizer.fit(train_images)
-    print(f"[P1.5] 训练集标准化统计量：mean={standardizer.mean:.6f} "
+    print(f"[split] 训练集标准化统计量：mean={standardizer.mean:.6f} "
           f"std={standardizer.std:.6f}（n={standardizer.n_samples}，仅训练集）")
 
     # ---- ⑥ 保存划分与标准化器 --------------------------------------------
     split_path = processed / str(args.out_name)
     if split_path.exists() and not args.force:
-        print(f"[P1.5] 错误：{split_path} 已存在；如需覆盖请加 --force")
+        print(f"[split] 错误：{split_path} 已存在；如需覆盖请加 --force")
         return 2
     np.savez_compressed(
         split_path,
@@ -491,7 +497,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "input_size": list(params.input_size),
         }, ensure_ascii=False)),
     )
-    print(f"[P1.5] 划分已写出：{split_path} ({split_path.stat().st_size / 1024 ** 2:.1f} MB)")
+    print(f"[split] 划分已写出：{split_path} ({split_path.stat().st_size / 1024 ** 2:.1f} MB)")
 
     # ---- ⑦ 写 manifest.csv ------------------------------------------------
     rows: List[Dict[str, object]] = []
@@ -549,11 +555,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     manifest_path = resolve_path(cfg, "manifest")
     if args.skip_manifest:
-        print("[P1.5] --skip-manifest：跳过 manifest.csv 写出"
+        print("[split] --skip-manifest：跳过 manifest.csv 写出"
               "（主 manifest 属于 32×128 口径，不覆盖）")
     else:
         _write_manifest_rows(manifest_path, rows)
-        print(f"[P1.5] manifest 已写出：{manifest_path}（{len(rows)} 行）")
+        print(f"[split] manifest 已写出：{manifest_path}（{len(rows)} 行）")
 
     # ---- ⑧ 泄漏自检与摘要 -------------------------------------------------
     base_split_assignment = (
@@ -571,7 +577,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         raise AssertionError(f"强扰动集与 base 号码重叠 {len(overlap)} 个")
     synth_overlap = set(synth.texts) & (base_keys | hard_keys)
     if synth_overlap:
-        print(f"[P1.5] 提示：合成域与真实集有 {len(synth_overlap)} 个号码巧合重复"
+        print(f"[split] 提示：合成域与真实集有 {len(synth_overlap)} 个号码巧合重复"
               f"（概率事件，不构成泄漏：字体/成像完全不同）")
 
     summary = {
@@ -600,11 +606,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "split_summary_" + Path(str(args.out_name)).stem.replace("splits_", "") + ".json")
     with open(log_path, "w", encoding="utf-8") as fp:
         json.dump(summary, fp, ensure_ascii=False, indent=2)
-    print(f"[P1.5] 划分摘要已写出：{log_path}")
+    print(f"[split] 划分摘要已写出：{log_path}")
 
     print()
     print("=" * 72)
-    print("P1.5 号码去重划分完成（§2.5 ★）")
+    print("号码去重划分完成（§2.5 ★）")
     for k, v in summary["counts"].items():
         print(f"  {k:12s} {v:7d} 张")
     print(f"  唯一号码数: {summary['unique_plates']}")

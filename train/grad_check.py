@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""数值梯度检查（§5.4 第 1 项，P3 验收门槛）。
+"""数值梯度检查（§5.4 第 1 项，自检门槛）。
 
 为什么必须做
 ------------
@@ -46,6 +46,12 @@ import sys as _sys
 
 if __package__ in (None, ""):
     _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    # 直接运行 train/ 下脚本时 sys.path[0] 是 train/，那里的 train.py 会以顶层
+    # 模块身份遮蔽同名 train 包，导致 `from train.xxx import ...` 失败，因此把
+    # 脚本自身目录从 sys.path 中移除（项目根已插到最前，models/evaluate 仍可导入）。
+    _here = str(Path(__file__).resolve().parent)
+    while _here in _sys.path:
+        _sys.path.remove(_here)
 
 from models.backend import get_backend
 from models.charset import NUM_CLASSES, SEQ_LEN, resolve_positions
@@ -454,7 +460,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     int
         通过返回 0，失败返回 1。
     """
-    ap = argparse.ArgumentParser(description="P3 验收：数值梯度检查（§5.4）")
+    ap = argparse.ArgumentParser(description="自检：数值梯度检查（§5.4）")
     ap.add_argument("--config", type=str, default=None)
     ap.add_argument("--n-samples", type=int, default=None, help="差分用的样本数")
     ap.add_argument("--n-checks", type=int, default=None, help="每个参数抽查的分量数")
@@ -502,7 +508,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # ★ 逐头掩码始终构造（labels < 该头类别数）：基线 34×6 时全 1、不改变数值，
     #   194 节点结构下则**正是训练时的真实语义**（首位数字样本被掩盖）。
     #   这样 masked 反向路径在每次校验中都被覆盖——此前 mask 只进损失不进
-    #   反向时，该结构下校验必然 FAIL（code_audit 缺陷 #1 的复现路径）。
+    #   反向时，该结构下校验必然 FAIL（mask 一致性的复现路径）。
     head_dims_for_mask = resolve_positions(cfg.charset.positions)
     head_mask = [
         (labels[:, i] < int(c)).astype(np.float64)
@@ -512,7 +518,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     arches = ["shared", "independent"] if args.arch in (None, "both") else [args.arch]
 
     print("=" * 74)
-    print("P3 数值梯度检查（§5.4 第 1 项）")
+    print("数值梯度检查（§5.4 第 1 项）")
     print(f"  样本数 B={n_samples}  输入维 D={input_dim}  隐层 H={hidden}")
     print(f"  损失={loss_type}  λ={l2}  步长 h={epsilon}  精度=float64")
     print(f"  判据：相对误差 < {tol:.1e} 或 绝对误差 <= {abs_tol:.1e}")

@@ -584,7 +584,7 @@ if __name__ == "__main__":  # pragma: no cover
     tag = f"ccpd_{int(cfg.ccpd.input_size[0])}x{int(cfg.ccpd.input_size[1])}"
     cache = Path(cfg.paths.processed_dir) / f"{tag}.npz"
     if not cache.exists():
-        raise SystemExit(f"缺少缓存 {cache}，请先跑 phase1_prepare.py")
+        raise SystemExit(f"缺少缓存 {cache}，请先跑 train/prepare_data.py")
 
     images, labels, _ = load_cache(cache)
     pick = np.arange(min(8, len(images)))
