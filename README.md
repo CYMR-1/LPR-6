@@ -182,9 +182,10 @@ python train/prepare_data.py --no-save-crops
 python train/prepare_data.py --save-crops D:/crops_dump
 python train/prepare_data.py --save-crops-n 500
 
-# ★ 人工核对（必做，通过前不得进入训练）
-#   产出 20 张「裁剪图 + 标签字符串」网格图，确认裁剪区域与标签逐位对应
-python evaluate/visualize.py check-grid
+# 人工核对
+python evaluate/visualize.py check-grid                  # 数据准备的自检网格
+python evaluate/visualize.py selftest                    # 绘图链路自检
+python evaluate/visualize.py error-grid --run final_s42  # 错误样本网格（需先评测）
 
 # 数据划分：号码去重划分 + 生成合成域测试集（按 configs 的 synth.backend 选择后端）
 python train/split_dataset.py

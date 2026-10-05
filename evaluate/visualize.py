@@ -10,6 +10,14 @@
 
 所有绘图函数都会在文件名与标题中使用中文，因此统一通过
 :func:`setup_chinese_font` 配置 matplotlib 的中文字体。
+
+用法
+----
+::
+
+    python evaluate/visualize.py check-grid                  # 数据准备的自检网格
+    python evaluate/visualize.py selftest                    # 绘图链路自检
+    python evaluate/visualize.py error-grid --run final_s42  # 错误样本网格（需先评测）
 """
 
 from __future__ import annotations
@@ -391,10 +399,18 @@ if __name__ == "__main__":  # pragma: no cover
     import argparse
 
     ap = argparse.ArgumentParser(description="可视化工具")
-    ap.add_argument("command", choices=["check-grid", "selftest"])
+    ap.add_argument("command", choices=["check-grid", "selftest", "error-grid"])
     ap.add_argument("--n", type=int, default=20)
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--out", type=str, default="reports/figs/ccpd_check_grid.png")
+    ap.add_argument("--out", type=str, default=None,
+                    help="输出文件；缺省时 check-grid 用 reports/figs/ccpd_check_grid.png，"
+                         "error-grid 用 <figs_dir>/<run>_errors.png")
+    ap.add_argument("--run", type=str, default="final_s42",
+                    help="error-grid：运行短名，读 <logs_dir>/<run>_errors.npz")
+    ap.add_argument("--cols", type=int, default=0,
+                    help="error-grid：网格列数，0 表示取配置 viz.grid_cols")
+    ap.add_argument("--title", type=str, default=None,
+                    help="error-grid：自定义图标题")
     args = ap.parse_args()
 
     if args.command == "selftest":
@@ -404,6 +420,37 @@ if __name__ == "__main__":  # pragma: no cover
         labs = rng.integers(0, NUM_CLASSES, size=(10, SEQ_LEN))
         p = plot_check_grid(imgs, labs, Path("reports/figs/_selftest_grid.png"), n=8, seed=1)
         print("绘图自检通过：", p)
+
+    elif args.command == "error-grid":
+        from models.config import load_config, resolve_path
+
+        cfg = load_config()
+        run = str(args.run)
+        npz = resolve_path(cfg, "logs_dir") / f"{run}_errors.npz"
+        if not npz.is_file():
+            raise SystemExit(
+                f"[viz] 缺少 {npz}\n"
+                f"      请先用评测生成错误样本：python evaluate/main.py --run {run}")
+        with np.load(npz, allow_pickle=False) as data:
+            need = ("error_images", "error_truth", "error_pred", "error_conf")
+            missing = [k for k in need if k not in data.files]
+            if missing:
+                raise SystemExit(
+                    f"[viz] {npz} 缺少字段 {missing}；实际字段 = {list(data.files)}")
+            images = data["error_images"]
+            n_err = int(images.shape[0])
+            if n_err == 0:
+                print(f"[viz] {run} 在该测试集上没有错误样本，无需绘图")
+                raise SystemExit(0)
+            out_path = (Path(args.out) if args.out
+                        else resolve_path(cfg, "figs_dir") / f"{run}_errors.png")
+            title = args.title or f"{run} 错误样本（优先高置信错误，共 {n_err} 张）"
+            plot_error_samples(
+                images, data["error_truth"], data["error_pred"], data["error_conf"],
+                out_path, n=args.n, cols=int(args.cols) or int(cfg.viz.grid_cols),
+                title=title,
+            )
+        print(f"[viz] {run}：错误样本共 {n_err} 张，图中展示 {min(int(args.n), n_err)} 张")
 
     else:  # check-grid
         from models.config import ensure_dirs, load_config
@@ -422,8 +469,9 @@ if __name__ == "__main__":  # pragma: no cover
         chosen = [files[int(i)] for i in sorted(pick)]
         res = build_cache(chosen, params, verbose=False)
         print(f"核对用样本：请求 {len(chosen)}，成功预处理 {res.stats.kept}")
+        out_path = Path(args.out) if args.out else Path("reports/figs/ccpd_check_grid.png")
         plot_check_grid(
-            res.images, res.labels, Path(args.out),
+            res.images, res.labels, out_path,
             n=args.n, cols=int(cfg.viz.grid_cols), seed=int(args.seed),
             source_names=[r.path.name for r in res.records],
         )
