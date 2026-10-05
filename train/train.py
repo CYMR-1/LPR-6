@@ -312,8 +312,8 @@ def load_data_bundle(
     processed = resolve_path(cfg, "processed_dir")
     tag = f"ccpd_{int(cfg.ccpd.input_size[0])}x{int(cfg.ccpd.input_size[1])}"
     cache = processed / f"{tag}.npz"
-    # ★ 划分文件名可配置：E8 的 24×96 变体用 splits_24x96.npz（合成域图像
-    # 与标准化统计量都必须在对应分辨率下重建），默认仍是 splits.npz。
+    # ★ 划分文件名可配置：换输入尺寸时，合成域图像与标准化统计量都必须在
+    # 对应分辨率下重建，因此划分文件必须与 ccpd.input_size 配套。
     split_path = processed / str(cfg.get("paths.splits_file", "splits.npz"))
     if not cache.exists():
         raise FileNotFoundError(f"缺少预处理缓存 {cache}，请先运行 train/phase1_prepare.py")
@@ -406,7 +406,7 @@ class Trainer:
         self.checkpoint_dir = resolve_path(cfg, "models_dir")
         self.best: Optional[Tuple[float, Params]] = None
 
-        # E9：首位 24 类时，训练集中首位为数字的样本其 head0 无有效目标，
+        # 首位 24 类时，训练集中首位为数字的样本其 head0 无有效目标，
         # 必须用 mask 排除其损失贡献（否则会朝 one-hot 全零的方向优化）。
         self._use_head_mask = (int(self.head_dims[0]) <= LETTER_MAX_INDEX + 1)
 
@@ -607,7 +607,7 @@ class Trainer:
             t0 = time.perf_counter()
             self.history.stopped_epoch = epoch
 
-            # 时间预算：E4 的 batch_size=1 每轮要上百秒，80 轮需要数小时。
+            # 时间预算：batch_size=1 时每轮要上百秒，80 轮需要数小时。
             # 达到预算就停止本轮之后的所有训练，并把已跑的轮次如实记录，
             # 绝不伪造"跑满 80 轮"的结果。
             if (tcfg.time_budget_seconds is not None

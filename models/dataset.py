@@ -7,7 +7,7 @@
 2. 维护 ``manifest.csv``：每张图可追溯到来源文件、子集名、六字符标签、
    裁剪参数与脚本版本（§2.5 要求 2）；
 3. 提供 :class:`PlateDataset` 与批迭代器，**支持 batch=1 与全批量**
-   （E4 需要 ``{1, 32, 64, 128, full}`` 全部可跑）；
+   （``{1, 32, 64, 128, full}`` 全部可跑）；
 4. 提供 :class:`GlobalStandardizer`：全局零均值/单位方差标准化，
    **统计量只在训练集上计算**（§2.3.2）。
 
@@ -241,7 +241,7 @@ def build_cache(
     params : PrepParams
         预处理参数。
     positions : Sequence[int] or None
-        位置约束；给了就按它做位置合法性过滤（E9 用）。
+        位置约束；给了就按它做位置合法性过滤。
     require_image_size_check : bool
         是否启用顶点越界检查（需要打开图片读尺寸）。
     verbose : bool

@@ -500,9 +500,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     labels = rng.integers(0, NUM_CLASSES, size=(n_samples, SEQ_LEN)).astype(np.int64)
 
     # ★ 逐头掩码始终构造（labels < 该头类别数）：基线 34×6 时全 1、不改变数值，
-    #   E9 的 194 节点结构下则**正是训练时的真实语义**（首位数字样本被掩盖）。
+    #   194 节点结构下则**正是训练时的真实语义**（首位数字样本被掩盖）。
     #   这样 masked 反向路径在每次校验中都被覆盖——此前 mask 只进损失不进
-    #   反向时，E9 结构下该校验必然 FAIL（code_audit 缺陷 #1 的复现路径）。
+    #   反向时，该结构下校验必然 FAIL（code_audit 缺陷 #1 的复现路径）。
     head_dims_for_mask = resolve_positions(cfg.charset.positions)
     head_mask = [
         (labels[:, i] < int(c)).astype(np.float64)

@@ -220,7 +220,7 @@ def generate_dataset_from_repo(
     out_dir : Path or None
         若给出，每张另存 JPEG 供人工查看（不入库）。
     positions : Sequence[int] or None
-        位置类别约束（E9 口径下首位仅字母；上游构造天然满足）。
+        位置类别约束（首位仅字母时；上游构造天然满足）。
     verbose : bool
         是否打印进度。
 

@@ -19,8 +19,8 @@
 
 命令行
 ------
-    python evaluate/main.py --run baseline_s42
-    python evaluate/main.py --run baseline_s42 --backend numpy
+    python evaluate/main.py --run final_s42
+    python evaluate/main.py --run final_s42 --backend numpy
 
 命名说明
 --------
@@ -67,7 +67,19 @@ SPLIT_ORDER = ("train", "val", "test", "hard_test", "synth_test")
 
 
 def load_run_config(cfg, run_name: str):
-    """读取某次运行在 ``reports/configs/<run>.yaml`` 保存的变体配置。
+    """读取某次运行的部署配置。
+
+    解析顺序（找到即用）
+    --------------------
+    1. ``reports/configs/<run_name>.yaml``：该次运行自己的配置；
+    2. ``reports/configs/final.yaml``：交付模型的通用部署口径
+       （``augmentation.baseline_level: none``，与最终检查点一致）；
+    3. 都没有时抛出 :class:`FileNotFoundError`。
+
+    ★ 为什么不再静默回退到 ``configs/default.yaml``：默认配置的数据增强档位是
+    ``weak``，而最终模型的检查点是在关闭增强（``none``）的口径下训练的。
+    拿默认配置去评测会得到口径错误的数字（同一模型两种口径的整牌准确率相差
+    数十个百分点），因此必须显式报错，让调用方指定正确的配置。
 
     参数
     ----
@@ -79,19 +91,26 @@ def load_run_config(cfg, run_name: str):
     返回
     ----
     Config
-        该次运行实际使用的配置；若变体配置缺失则返回传入的基线配置。
+        该次运行实际使用的配置。
     """
     import yaml
 
     from models.config import Config
 
     var_dir = resolve_path(cfg, "logs_dir").parent / "configs"
-    path = var_dir / f"{run_name}.yaml"
-    if not path.is_file():
-        return cfg
-    with open(path, "r", encoding="utf-8") as fp:
-        raw = yaml.safe_load(fp)
-    return Config(raw) if isinstance(raw, dict) else cfg
+    candidates = [var_dir / f"{run_name}.yaml", var_dir / "final.yaml"]
+    for path in candidates:
+        if path.is_file():
+            with open(path, "r", encoding="utf-8") as fp:
+                raw = yaml.safe_load(fp)
+            if not isinstance(raw, dict):
+                raise ValueError(f"配置不是映射：{path}")
+            print(f"[eval] 使用配置 {path}")
+            return Config(raw)
+    raise FileNotFoundError(
+        f"找不到运行 {run_name!r} 的配置；已尝试 "
+        f"{', '.join(str(p) for p in candidates)}。"
+        f"请确认检查点与其配置同名，或用 --config 指定配置路径")
 
 
 def rebuild_params(cfg, run_name: str, ckpt_dir: Path) -> Params:
@@ -191,8 +210,8 @@ def build_datasets(cfg, standardizer: GlobalStandardizer) -> Dict[str, PlateData
     每个数据集 ``images (N, 32, 128)``，``labels (N, 6)``。
     """
     processed = resolve_path(cfg, "processed_dir")
-    # ★ 缓存与划分文件都要按配置取：E8 的 24×96 变体使用
-    # ccpd_96x24.npz + splits_24x96.npz，不能写死 128x32 / splits.npz。
+    # ★ 缓存与划分文件都要按配置取（input_size 与 paths.splits_file 必须配对），
+    # 不能写死 128x32 / splits.npz。
     tag = f"ccpd_{int(cfg.ccpd.input_size[0])}x{int(cfg.ccpd.input_size[1])}"
     split_name = str(cfg.get("paths.splits_file", "splits.npz"))
     images, labels, _ = load_cache(processed / f"{tag}.npz")
@@ -266,21 +285,17 @@ def evaluate_run(
     std = load_standardizer(run_cfg)
     datasets = build_datasets(run_cfg, std)
 
+    # 位置合法性掩码：仅当首位类别数 < 34（即首位被约束为字母）时才需要，
+    # 由数据集标签动态生成——首位为数字的样本其 head0 无有效目标。
     head_mask_fn = None
-    if run_cfg.model.arch == "independent" or list(run_cfg.charset.positions) != [34] * SEQ_LEN:
-        # 需要位置合法性掩码时，由数据集标签动态生成
+    use_mask = int(list(run_cfg.charset.positions)[0]) < 34
+    if use_mask:
         def head_mask_fn(labels):  # noqa: ANN001
             from models.charset import is_position_legal
 
             m0 = np.array([1.0 if is_position_legal(0, int(v)) else 0.0
                            for v in labels[:, 0]], dtype=np.float32)
-            mask = [m0] + [np.ones(len(labels), dtype=np.float32)] * (SEQ_LEN - 1)
-            return mask
-
-    # 判断是否需要掩码：仅当首位类别数 < 34 时才需要
-    use_mask = int(list(run_cfg.charset.positions)[0]) < 34
-    if not use_mask:
-        head_mask_fn = None
+            return [m0] + [np.ones(len(labels), dtype=np.float32)] * (SEQ_LEN - 1)
 
     results: Dict[str, Any] = {}
     arrays: Dict[str, np.ndarray] = {}
@@ -436,7 +451,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         0 表示成功。
     """
     ap = argparse.ArgumentParser(description="ProjectX 单次运行评测（§6）")
-    ap.add_argument("--run", required=True, help="运行短名，如 baseline_s42")
+    ap.add_argument("--run", required=True, help="运行短名，如 final_s42")
     ap.add_argument("--config", default=None, help="基线配置路径")
     ap.add_argument("--backend", default=None, help="推理后端 numpy/cupy")
     ap.add_argument("--max-eval-samples", type=int, default=None,

@@ -25,7 +25,7 @@
    * CCPD 仓库源码 ``rpnet/demo.py``（第 29–35 行）中的 ``provinces / alphabets / ads``
      三个数组，2024 年核对结果与 README 完全一致。
 
-4. 位置约束（E9）：第 1 位（汉字后第一位）仅字母，共 24 类；第 2–6 位为全 34 类。
+4. 位置约束：第 1 位（汉字后第一位）仅字母，共 24 类；第 2–6 位为全 34 类。
 
 注意：CCPD 三张表的**最后一个元素都是字母 ``O``**，作者用它作为"无字符"的哨兵值
 （中国车牌字符集里没有 ``O``）。任何读到索引等于"表长度 - 1"的记录都必须视为
@@ -363,7 +363,7 @@ if __name__ == "__main__":  # pragma: no cover - 手工自检入口
     print(f"NUM_CLASSES  = {NUM_CLASSES}")
     print(f"SEQ_LEN      = {SEQ_LEN}")
     print(f"输出节点总数 = {total_output_nodes()}  (基线应为 204)")
-    print(f"E9 首个位置24类时 = {total_output_nodes([0, 34, 34, 34, 34, 34])} (应为 194)")
+    print(f"首位 24 类时输出节点 = {total_output_nodes([0, 34, 34, 34, 34, 34])} (应为 194)")
     demo = "A1B2C3"
     enc = encode_label(demo)
     print(f"编码 {demo} -> {enc.tolist()}")

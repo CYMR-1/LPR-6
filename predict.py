@@ -7,8 +7,9 @@
 CCPD / 合成数据集。本脚本把同一套预处理与前向传播开放给**任意一张图片**：
 
 * 从 ``reports/checkpoints/<run>_best.npz`` 载入权重（不重新训练）；
-* 从该次运行保存的变体配置（``reports/configs/<run>.yaml``）恢复输入尺寸、
-  裁剪比例等预处理参数，**与训练口径严格一致**；
+* 从该次运行的部署配置（``reports/configs/<run>.yaml``，缺失时回退
+  ``reports/configs/final.yaml``）恢复输入尺寸、裁剪比例等预处理参数，
+  **与训练口径严格一致**；
 * 从划分文件读取**训练集拟合的标准化统计量**（禁止用用户图片现算，
   否则分布就变了）；
 * 输出六位字符、逐位置置信度与整牌联合置信度。
@@ -28,9 +29,10 @@ CCPD / 合成数据集。本脚本把同一套预处理与前向传播开放给*
 命令行
 ------
     python predict.py my_plate.jpg
-    python predict.py a.jpg b.jpg --run E7_aug_none_s42 --mode cropped
+    python predict.py a.jpg b.jpg --run final_s43 --mode cropped
     python predict.py car.jpg --corners "433,341;120,315;128,272;445,295"
     python predict.py my_plate.jpg --save-debug reports/figs/_debug --json
+    python predict.py my_plate.jpg --ckpt reports/checkpoints/final_s42_best.npz
 
 形状
 ----
@@ -61,9 +63,9 @@ from models.charset import decode_label, index_to_char  # noqa: E402
 from models.config import load_config, resolve_path  # noqa: E402
 from models.model import Params, forward, predict  # noqa: E402
 
-# 默认识别用检查点：E7 aug_none 变体（同分布字符 98.4% / 整牌 91.8%，
-# 见实验报告 §1 第 1 条），3 种子中取 42。
-DEFAULT_RUN = "E7_aug_none_s42"
+# 默认识别用检查点：最终交付模型 final_s42（同分布测试字符 98.28% / 整牌 91.35%，
+# 3 个种子中最常用的默认；另两个种子为 final_s43 / final_s44）。
+DEFAULT_RUN = "final_s42"
 
 
 def parse_corners(text: str) -> np.ndarray:
@@ -230,6 +232,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--run", default=DEFAULT_RUN,
                     help=f"检查点运行短名（默认 {DEFAULT_RUN}，同分布最优）；"
                          f"对应 reports/checkpoints/<run>_best.npz")
+    ap.add_argument("--ckpt", default=None, metavar="PATH",
+                    help="直接指定检查点文件（*.npz），优先于 --run；"
+                         "配置仍按 --run 解析")
     ap.add_argument("--mode", choices=["full", "cropped"], default="full",
                     help="full=图片含完整 7 位车牌（自动裁掉首位汉字）；"
                          "cropped=图片已是后 6 位字符区域")
@@ -245,7 +250,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     cfg = load_config(None)
     run_cfg = load_run_config(cfg, args.run)
-    ckpt = resolve_path(run_cfg, "models_dir") / f"{args.run}_best.npz"
+    ckpt = (Path(args.ckpt) if args.ckpt
+            else resolve_path(run_cfg, "models_dir") / f"{args.run}_best.npz")
     if not ckpt.is_file():
         print(f"[predict] 错误：检查点不存在 {ckpt}", file=sys.stderr)
         return 1

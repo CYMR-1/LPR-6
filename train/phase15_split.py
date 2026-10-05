@@ -362,10 +362,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--config", type=str, default=None)
     ap.add_argument("--force", action="store_true", help="覆盖已存在的划分产物")
     ap.add_argument("--out-name", type=str, default="splits.npz",
-                    help="划分文件名；E8 的 24×96 口径用 splits_24x96.npz，"
+                    help="划分文件名；24×96 口径用 splits_24x96.npz，"
                          "避免覆盖主划分")
     ap.add_argument("--skip-manifest", action="store_true",
-                    help="不写 manifest.csv（E8 重建划分时用：主 manifest 属于"
+                    help="不写 manifest.csv（重建划分时用：主 manifest 属于"
                          " 32×128 口径，不能被覆盖）")
     args = ap.parse_args(argv)
 
@@ -594,7 +594,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     }
     log_path = resolve_path(cfg, "logs_dir") / "split_summary.json"
     if str(args.out_name) != "splits.npz":
-        # ★ 非主划分（如 E8 的 splits_24x96.npz）不得覆盖主摘要，
+        # ★ 非主划分（如 splits_24x96.npz）不得覆盖主摘要，
         # 否则主口径的标准化统计量会被别的分辨率覆盖（实测踩坑）。
         log_path = log_path.with_name(
             "split_summary_" + Path(str(args.out_name)).stem.replace("splits_", "") + ".json")

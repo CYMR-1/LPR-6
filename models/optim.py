@@ -3,9 +3,8 @@
 
 为什么不用框架优化器
 --------------------
-规格 §8.1 要求不使用 PyTorch/TensorFlow，优化器同样手写；E5 需要对比
-"Momentum vs 纯 SGD"，E6 需要对比"有无 L2"，因此优化器必须把这两项作为
-显式参数。
+规格 §8.1 要求不使用 PyTorch/TensorFlow，优化器同样手写；因此动量与
+权重衰减都必须作为显式参数暴露出来，便于单独开关。
 
 更新式（Momentum，§4.3）
 ------------------------
@@ -50,7 +49,7 @@ class OptimConfig:
     lr : float
         学习率。
     momentum : float
-        动量系数 μ（0 表示纯 SGD，用于 E5 对照）。
+        动量系数 μ（0 表示纯 SGD）。
     nesterov : bool
         是否使用 Nesterov 动量。
     decay : float
@@ -162,7 +161,7 @@ class SGDMomentum:
                 else:
                     arr -= lr * v
             else:
-                arr -= lr * g          # 纯 SGD（μ = 0，E5 对照）
+                arr -= lr * g          # 纯 SGD（μ = 0）
 
         self.step_count += 1
 
@@ -207,7 +206,7 @@ def lr_at_step(
     warmup_steps: int = 0,
     min_lr_ratio: float = 0.0,
 ) -> float:
-    """学习率调度（供 E8 对照与长训练使用）。
+    """学习率调度（供长训练使用）。
 
     参数
     ----

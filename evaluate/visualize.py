@@ -6,7 +6,7 @@
 1. **人工核对网格**（:func:`plot_check_grid`）：P1 的验收门槛（§2.3.3 必做），
    随机抽 20 张输出「裁剪图 + 标签字符串」，用于确认①四角顶点顺序解析无误、
    ②后 6 位字符与图像逐位对应。**核对通过前不得进入训练阶段。**
-2. **报告用图**：训练曲线、逐位置混淆矩阵、错误样本网格。
+2. **评测用图**：训练曲线、逐位置混淆矩阵、错误样本网格。
 
 所有绘图函数都会在文件名与标题中使用中文，因此统一通过
 :func:`setup_chinese_font` 配置 matplotlib 的中文字体。
@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -381,65 +381,6 @@ def plot_error_samples(
         axes[r][c].axis("off")
     fig.suptitle(title, fontsize=13)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=150)
-    plt.close(fig)
-    return out_path
-
-
-# =============================================================================
-# 5. 实验对比柱状图
-# =============================================================================
-
-
-def plot_variant_comparison(
-    summary: Dict[str, Dict[str, Tuple[float, float]]],
-    metric: str,
-    out_path: Path,
-    title: Optional[str] = None,
-    ylabel: Optional[str] = None,
-) -> Path:
-    """绘制某个对照实验各变体的「均值 ± 标准差」柱状图。
-
-    参数
-    ----
-    summary : dict
-        ``{变体名: {指标名: (均值, 标准差)}}``。
-    metric : str
-        要画的指标名。
-    out_path : Path
-        输出路径。
-    title : str or None
-        图标题。
-    ylabel : str or None
-        y 轴标签。
-
-    返回
-    ----
-    Path
-        写出路径。
-
-    形状
-    ----
-    ``{str: {str: (float, float)}}`` -> PNG 文件
-    """
-    setup_chinese_font()
-    names = [k for k in summary if metric in summary[k]]
-    if not names:
-        raise ValueError(f"没有任何变体包含指标 {metric}")
-
-    means = [summary[k][metric][0] for k in names]
-    stds = [summary[k][metric][1] for k in names]
-
-    fig, ax = plt.subplots(figsize=(max(5.0, 1.5 * len(names)), 4.2))
-    x = np.arange(len(names))
-    ax.bar(x, means, yerr=stds, capsize=5, alpha=0.85)
-    ax.set_xticks(x)
-    ax.set_xticklabels(names, rotation=20, ha="right")
-    ax.set_ylabel(ylabel or metric)
-    ax.set_title(title or f"{metric} 对照")
-    ax.grid(axis="y", alpha=0.3)
-    fig.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=150)
     plt.close(fig)

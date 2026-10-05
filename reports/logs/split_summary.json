@@ -33,7 +33,7 @@
     128,
     32
   ],
-  "note": "合成域与强扰动集不参与任何调参决策（§2.5 要求 3）；本文件由 train/restore_split_summary.py 从冻结的 splits.npz 只读重建（曾被 24×96 口径覆盖，phase15_split.py 已修复）；合成域已切换为 generator_repo 后端（Nenger/chinese_licence_plate_generator @43bac43），hard 集保持历史口径不变",
+  "note": "合成域与强扰动集不参与任何调参决策（§2.5 要求 3）；本文件从冻结的 splits.npz 只读重建；合成域使用 generator_repo 后端（Nenger/chinese_licence_plate_generator @43bac43），hard 集为历史口径不变",
   "restored_from_frozen_split": true,
   "synth_config": {
     "backend": "generator_repo",

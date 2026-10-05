@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""模型评价的公共实现（训练中验证、最终测试、E9 位置约束共用同一份代码）。
+"""模型评价的公共实现（训练中验证、最终测试、位置约束共用同一份代码）。
 
 为什么要独立成模块
 ------------------
@@ -95,7 +95,7 @@ def evaluate_dataset(
     loss_type : str
         损失类型。
     head_mask_fn : callable or None
-        形如 ``fn(labels_batch) -> list of (B,) mask``，用于 E9 排除首位越界样本。
+        形如 ``fn(labels_batch) -> list of (B,) mask``，用于排除首位越界样本。
     with_confusion : bool
         是否计算混淆矩阵（大测试集上可关掉省内存）。
     max_eval_samples : int or None

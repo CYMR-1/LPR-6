@@ -8,8 +8,8 @@
 --------
 * :class:`Config` 把嵌套字典包装成"点分路径"访问的对象，
   例如 ``cfg.model.hidden_dim``、``cfg["optim.batch_size"]``、``cfg.get("loss.type")``。
-* :func:`apply_patch` 用于对照实验：把 ``{"model.arch": "independent"}`` 这类
-  点分路径补丁**深拷贝**到配置上，保证各变体互不污染。
+* :func:`apply_patch` 把 ``{"optim.batch_size": 32}`` 这类点分路径补丁
+  **深拷贝**到配置上并返回新配置，保证原配置不被污染。
 * :func:`git_info` 调用 ``git rev-parse --short HEAD`` 与 ``git status --porcelain``，
   产出实验日志表头所需的四个溯源字段。
 
@@ -359,7 +359,7 @@ def ensure_dirs(cfg: Config) -> None:
     """
     for key in (
         "ccpd_root", "synth_root", "processed_dir",
-        "models_dir", "logs_dir", "figs_dir", "tables_dir",
+        "models_dir", "logs_dir", "figs_dir",
     ):
         resolve_path(cfg, key).mkdir(parents=True, exist_ok=True)
     resolve_path(cfg, "manifest").parent.mkdir(parents=True, exist_ok=True)
@@ -568,11 +568,11 @@ class RunMeta:
         参数
         ----
         cfg : Config
-            本次实验生效的配置（已含变体补丁）。
+            本次运行生效的配置。
         seed : int
             随机种子。
         **extra : Any
-            额外字段，例如 ``experiment="E1"``、``variant="shared"``。
+            额外字段，例如 ``run_name="final_s42"``、``stage="train"``。
 
         返回
         ----

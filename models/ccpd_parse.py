@@ -474,7 +474,7 @@ def validate_record(
     allow_out_of_bounds_px : float
         允许的轻微越界容差（像素）。
     positions : Sequence[int] or None
-        位置约束；给了就做位置合法性检查（E9 用）。
+        位置约束；给了就做位置合法性检查。
 
     返回
     ----

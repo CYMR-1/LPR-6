@@ -7,7 +7,7 @@
   由 :class:`models.dataset.PlateDataset` 在取批时按样本调用；
 * **只在训练集启用**；验证/测试集必须保持原样，否则指标不可比；
 * 强度档位由 ``configs/default.yaml`` 的 ``augmentation.levels`` 定义，
-  E7 通过切换 ``augmentation.baseline_level`` 实现对照；
+  强度档位通过 ``augmentation.baseline_level`` 切换；
 * 依赖只用 numpy 与 Pillow（§8.1 依赖约束）。
 
 支持的增强（§2.6 表）

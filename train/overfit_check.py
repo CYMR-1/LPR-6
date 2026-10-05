@@ -201,7 +201,7 @@ def overfit_check(
     x, y = ds.get_batch(np.arange(len(ds)), augment=False)
     targets = build_onehot(y, head_dims, backend)
 
-    # E9 情形下首位越界的样本不参与 head0 损失
+    # 首位越界的样本不参与 head0 损失
     mask = None
     if int(head_dims[0]) <= 24:
         m0 = (y[:, 0] < int(head_dims[0])).astype(np.float32)

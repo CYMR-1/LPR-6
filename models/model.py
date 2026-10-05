@@ -96,7 +96,7 @@ def sigmoid_grad_from_output(h, xp=np):
 
 
 def relu(z, xp=np):
-    """ReLU 激活（E2 对照用）。
+    """ReLU 激活。
 
     参数
     ----
@@ -194,7 +194,7 @@ def cross_entropy_from_logits(v, d, xp=np, eps: float = 1e-12):
 
 
 def mse_from_probs(probs: Sequence, targets: Sequence, xp=np):
-    """由六个头的概率计算平方误差之和（E3 对照用）。
+    """由六个头的概率计算平方误差之和。
 
     参数
     ----
@@ -466,11 +466,11 @@ def build_model(
     hidden_dim : int
         隐层维度 H（基线 256）。
     head_dims : Sequence[int]
-        六个头的输出维度（基线 ``[34]*6``；E9 可 ``[24,34,34,34,34,34]``）。
+        六个头的输出维度（默认 ``[34]*6``；首位可约束为 ``[24,34,34,34,34,34]``）。
     arch : str
-        ``shared``（主模型）或 ``independent``（E1 对照）。
+        ``shared``（六路共享隐层）或 ``independent``（六路独立隐层）。
     activation : str
-        ``sigmoid``（基线）或 ``relu``（E2 对照）。
+        ``sigmoid`` 或 ``relu``（relu 需要更小的学习率）。
     init : str
         初始化方式，见 :func:`init_weights`。
     seed : int
@@ -711,11 +711,11 @@ def backward_shared(
        * 平方误差 + Softmax：``δ_i = (y_i − d_i) ⊙ y_i ⊙ (1 − y_i) / B``
          （因为 ``∂L/∂v = (y−d) ⊙ σ'(v)``，Softmax 的雅可比在此按对角近似，
          这是 §4.2 所批评的"MSE + Softmax 梯度饱和"现象的直接体现，
-         也正是 E3 要观察的对象）
+         也正是误差反向传播被压扁的原因）
        * 若给了 ``head_mask``：``δ_i ← δ_i ⊙ mask_i``（被掩盖样本的梯度置零，
          与 :func:`compute_loss` 中的 ``ce_i * mask`` 严格对应——
-         ★ 历史上 mask 只进损失不进反向，导致两者不一致，梯度校验在 E9
-         的 194 节点结构下必然 FAIL；修复后两侧一致）
+         ★ 历史上 mask 只进损失不进反向，导致两者不一致，梯度校验在首位
+         24 类的 194 节点结构下必然 FAIL；修复后两侧一致）
 
     ② 输出头梯度：``∂L/∂W2_i = hᵀδ_i + λW2_i``，``∂L/∂b2_i = Σ_batch δ_i``
     ③ 回传共享隐层：``∂L/∂h = Σ_i δ_i W2_iᵀ``（**六路累加**）
@@ -822,7 +822,7 @@ def backward_independent(
     loss_scale: float = 1.0,
     head_mask: Optional[Sequence] = None,
 ) -> Dict[str, np.ndarray]:
-    """六个独立 MLP 的**手写反向传播**（E1 对照，§3.2）。
+    """六个独立 MLP 的**手写反向传播**（§3.2）。
 
     与共享模型的唯一区别：**没有六路梯度累加**，每个位置各自从自己的隐层回传。
 
@@ -980,7 +980,7 @@ def build_onehot(
     targets = []
     for i, c in enumerate(head_dims):
         t = np.zeros((B, int(c)), dtype=np.dtype(dtype))
-        # 标签索引可能 >= 该头的类别数（E9 首位 24 类时），此时该位置无有效目标：
+        # 标签索引可能 >= 该头的类别数（首位 24 类时），此时该位置无有效目标：
         # 这里把越界样本的 one-hot 置零，并由调用方通过 mask 排除其损失贡献。
         valid = labels[:, i] < int(c)
         t[np.flatnonzero(valid), labels[valid, i]] = 1.0
@@ -1017,7 +1017,7 @@ def compute_loss(
     eps : float
         防 ``log(0)`` 的极小值（§5.3）。
     head_mask : Sequence or None
-        长度 6 的 0/1 掩码，用于 E9 中排除首位越界样本的损失贡献。
+        长度 6 的 0/1 掩码，用于排除首位越界样本的损失贡献。
 
     返回
     ----
@@ -1044,7 +1044,7 @@ def compute_loss(
         if head_mask is not None:
             m = head_mask[i]
             # GPU 后端下掩码必须在同一设备上，否则 cupy 与 numpy 相乘会报错
-            # （E9 评测链路实测踩坑；训练链路在 Trainer._head_mask 已转换）
+            # （评测链路实测踩坑；训练链路在 Trainer._head_mask 已转换）
             if backend.is_gpu and not type(m).__module__.startswith("cupy"):
                 from models.backend import to_device
                 m = to_device(np.asarray(m), backend)

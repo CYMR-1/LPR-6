@@ -31,14 +31,12 @@ paths:
   synth_preview: "data/synth_test_preview"  # 合成过程人工核对预览（不入库）
   processed_dir: "data/processed"        # .npz 预处理缓存
   manifest: "data/manifest.csv"          # 每张图可追溯的来源记录
-  ccpd_readme: "data/CCPD_README.md"     # 官方 README 存档（字符映射核对依据）
-  # 划分文件名。默认 splits.npz；E8 的 24×96 变体必须用 splits_24x96.npz
-  # （合成域图像与标准化统计量都随分辨率重建，划分索引保持一致）
+  ccpd_readme: "docs/CCPD_README.md"    # 官方 README 存档（字符映射核对依据）
+  # 划分文件名（与 ccpd.input_size 对应的缓存口径一起决定数据来源）
   splits_file: "splits.npz"
   models_dir: "reports/checkpoints"
   logs_dir: "reports/logs"
   figs_dir: "reports/figs"
-  tables_dir: "reports/tables"
 
 # -----------------------------------------------------------------------------
 # 字符集（§2.1）：数字 0-9 + 大写字母 A-Z 去掉 I、O = 34 类
@@ -48,11 +46,11 @@ charset:
   letters: "ABCDEFGHJKLMNPQRSTUVWXYZ"    # 26 - 2 = 24
   num_classes: 34
   seq_len: 6                             # 汉字之后的六个字符位置
-  # 每个位置的类别数。基线 34×6；E9 置为 [24, 34, 34, 34, 34, 34]（首位仅字母）
+  # 每个位置的类别数（默认六位均为 34 类全字符集）
   positions: [34, 34, 34, 34, 34, 34]
   # 位置合法性约束：allow[i] 为该位置允许的类别索引下界与上界（含）
   # index 0..23 = 字母表（A-Z 去掉 I/O），index 24..33 = 数字 0-9
-  position_letter_max_index: 23          # 首位仅允许 0..23 时使用（E9）
+  position_letter_max_index: 23          # 首位仅允许 0..23 时使用的字母索引上界
 
 # -----------------------------------------------------------------------------
 # CCPD 解析与裁剪（§2.3）
@@ -80,7 +78,7 @@ ccpd:
   hard_subset_names: ["blur", "challenge", "rotate", "tilt", "weather", "fn"]
   # 透视矫正目标尺寸（正视车牌，含首位汉字），随后裁掉左侧 1/7
   rectify_size: [168, 52]                # [W, H]
-  # 裁剪后缩放到的最终输入尺寸（§3.1）
+  # 裁剪后缩放到的最终输入尺寸（§3.1）。最终交付模型使用 32×128。
   input_size: [128, 32]                  # [W, H]，即 32×128
   keep_right_fraction: 0.8571428571428571  # 6/7：裁掉首位汉字区域
   grayscale: true
@@ -125,7 +123,7 @@ synth:
   seed: 2024                             # 固定生成种子（§2.4 要求 1）
   width: 128
   height: 32
-  # 每个字符位可用的字体（模拟跨域字体差异）。E9 说明：首位为省份汉字，不参与识别，
+  # 每个字符位可用的字体（模拟跨域字体差异）。首位为省份汉字，不参与识别，
   # 合成时同样渲染汉字以保证"汉字区域被裁掉"这一几何一致性。
   fonts:
     - "C:/Windows/Fonts/simhei.ttf"
@@ -206,10 +204,10 @@ augmentation:
 # 模型结构（§3）
 # -----------------------------------------------------------------------------
 model:
-  arch: "shared"                         # shared（主模型）| independent（E1 对照）
+  arch: "shared"                         # shared（本项目采用）| independent（六路独立隐层）
   input_dim: 4096                        # 32 × 128
-  hidden_dim: 256                        # 基线；对照 128 / 512
-  activation: "sigmoid"                  # 基线 sigmoid；E2 对照 relu
+  hidden_dim: 256                        # 隐层宽度
+  activation: "sigmoid"                  # sigmoid | relu（relu 需配更小的学习率）
   init: "xavier"                         # xavier / he / small_normal
   # 各位置输出维度：null 表示采用 charset.positions
   head_dims: null
@@ -218,8 +216,8 @@ model:
 # 损失函数（§4.1）
 # -----------------------------------------------------------------------------
 loss:
-  type: "cross_entropy"                  # 基线；E3 对照 mse
-  l2_lambda: 1.0e-4                      # 基线；搜索 {0, 1e-5, 1e-4, 1e-3}
+  type: "cross_entropy"                  # cross_entropy | mse
+  l2_lambda: 1.0e-4                      # L2 强度
   penalize_bias: false                   # ★ 偏置项不参与 L2 惩罚
   softmax_eps: 1.0e-12                   # 防 log(0)
 
@@ -228,14 +226,13 @@ loss:
 # -----------------------------------------------------------------------------
 optim:
   optimizer: "sgd_momentum"
-  learning_rate: 0.05                    # 搜索 {0.01, 0.05, 0.1}
-  momentum: 0.9                          # 基线；E5 对照 0
-  batch_size: 64                         # 基线；E4 对照 {1, 32, 128, full}
+  learning_rate: 0.05                    # 学习率
+  momentum: 0.9                          # 动量系数
+  batch_size: 64                         # 批大小；-1 = 全批量
   shuffle: true
   # 计算后端（§8.1）：numpy = CPU；cupy = GPU；auto = 优先 GPU，失败自动回退 CPU。
-  # 规格要求"训练使用 GPU（CuPy）"，故基线设为 cupy；本机实测 GPU 可用，
-  # 详见 reports/实验报告.md "GPU 与 CPU 的选择" 一节（含 batch=64 下 GPU 因
-  # 逐核启动开销并不比 CPU 快的实测数据）。
+  # 规格要求"训练使用 GPU（CuPy）"，故默认设为 cupy；无 GPU 环境会自动回退
+  # numpy 纯 CPU 运行（不会中断训练，只影响速度）。
   backend: "cupy"
   # 学习率调度：none = 常数学习率
   lr_decay: 0.0                          # 每 epoch 乘 (1 - lr_decay)
@@ -254,13 +251,8 @@ train:
   eval_every: 1                          # 每多少轮做一次验证
   log_every: 1
   # 单次运行的时间预算（秒）。null = 不限制。
-  #
-  # ★ 为什么需要：E4 要比较 batch_size=1（纯 SGD）与全批量。实测 bs=1 时
-  #   每轮约 103 秒（9000 样本逐样本更新），跑满 80 轮需要约 2.3 小时；
-  #   3 个种子就是 7 小时，超出可承受范围。设预算后，超时的运行会提前结束，
-  #   并在 *_run.json 里写入 budget_exhausted=true 与实际轮次，
-  #   汇总时明确标注"轮次不足"，绝不把它当成跑满 80 轮的结果。
-  #   用 --run-timeout 可覆盖此值。
+  # 设为正数时，超预算的运行会提前结束并在 *_run.json 里写入
+  # budget_exhausted=true 与实际轮次，绝不把"没跑满"伪装成跑满。
   time_budget_seconds: null
   # 小样本过拟合自检（P2/P3 验收，§5.4）
   #
@@ -316,88 +308,6 @@ grad_check:
   n_checks_per_param: 3                  # 每类参数抽查的分量数
   epsilon: 1.0e-6                        # float64 下的中心差分步长
   seed: 42
-
-# -----------------------------------------------------------------------------
-# 对照实验矩阵 E1–E9（§7）
-# -----------------------------------------------------------------------------
-experiments:
-  # 本轮一键执行的实验；E1/E3/E4/E7 为必做（§9 优先级）
-  enabled: ["E1", "E3", "E4", "E7"]
-  all_defined: ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9"]
-
-  # 每个实验的变体定义。key = 变体名，value = 覆盖到基线的配置补丁（点分路径）
-  E1:                                     # ★ 共享六头 vs 六个独立 MLP
-    question: "共享隐层是否优于六个独立 MLP"
-    variants:
-      shared:        { "model.arch": "shared" }
-      independent:   { "model.arch": "independent" }
-    seeds: [42, 43, 44]
-
-  E2:                                     # ReLU vs Sigmoid
-    question: "激活函数对训练速度与饱和的影响"
-    variants:
-      sigmoid:       { "model.activation": "sigmoid" }
-      relu:          { "model.activation": "relu" }
-    seeds: [42, 43, 44]
-
-  E3:                                     # ★ 交叉熵 vs 平方误差
-    question: "损失函数对前 20 轮下降速度与最终准确率的影响"
-    variants:
-      cross_entropy: { "loss.type": "cross_entropy" }
-      mse:           { "loss.type": "mse" }
-    seeds: [42, 43, 44]
-
-  E4:                                     # ★ 批量策略
-    question: "批量大小 / SGD / 小批量对稳定性与泛化的影响"
-    variants:
-      batch_1:       { "optim.batch_size": 1 }
-      batch_32:      { "optim.batch_size": 32 }
-      batch_64:      { "optim.batch_size": 64 }      # 基线
-      batch_128:     { "optim.batch_size": 128 }
-      batch_full:    { "optim.batch_size": -1 }      # -1 = 全批量
-    seeds: [42, 43, 44]
-
-  E5:                                     # 有无动量
-    question: "动量对震荡幅度与收敛速度的影响"
-    variants:
-      momentum_0:    { "optim.momentum": 0.0, "optim.learning_rate": 0.01 }
-      momentum_09:   { "optim.momentum": 0.9 }
-    seeds: [42, 43, 44]
-
-  E6:                                     # 有无 L2
-    question: "L2 正则对训练/验证差距与合成域准确率的影响"
-    variants:
-      l2_0:          { "loss.l2_lambda": 0.0 }
-      l2_1e-5:       { "loss.l2_lambda": 1.0e-5 }
-      l2_1e-4:       { "loss.l2_lambda": 1.0e-4 }    # 基线
-      l2_1e-3:       { "loss.l2_lambda": 1.0e-3 }
-    seeds: [42, 43, 44]
-
-  E7:                                     # ★ 有无数据增强
-    question: "数据增强对强扰动与合成域测试集准确率的影响"
-    variants:
-      aug_none:      { "augmentation.baseline_level": "none" }
-      aug_weak:      { "augmentation.baseline_level": "weak" }    # 基线
-      aug_strong:    { "augmentation.baseline_level": "strong" }
-    seeds: [42, 43, 44]
-
-  E8:                                     # 输入尺寸
-    question: "32×128 与 24×96 的精度/推理时间权衡"
-    variants:
-      size_32x128:   { "ccpd.input_size": [128, 32], "model.input_dim": 4096 }
-      size_24x96:    { "ccpd.input_size": [96, 24],  "model.input_dim": 2304, "paths.splits_file": "splits_24x96.npz" }
-    seeds: [42, 43, 44]
-
-  E9:                                     # 首位类别数
-    question: "全 34 类 vs 首位 24 类"
-    variants:
-      heads_34x6:    { "charset.positions": [34, 34, 34, 34, 34, 34] }
-      heads_24x34x5: { "charset.positions": [24, 34, 34, 34, 34, 34] }
-    seeds: [42, 43, 44]
-
-# -----------------------------------------------------------------------------
-# 绘图与汇总（§6 / §8.3）
-# -----------------------------------------------------------------------------
 viz:
   dpi: 150
   fig_format: "png"
